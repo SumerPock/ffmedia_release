@@ -1,0 +1,9 @@
+[Unit]
+Description=The firefly Communication service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/local/bin/firefly_communication.sh
+
+[Install]
+WantedBy=multi-user.target

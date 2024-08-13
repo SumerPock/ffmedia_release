@@ -1,0 +1,10 @@
+[Unit]
+Description=The ffmedia media capture service
+After=display-manager.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/local/bin/ffmedia_capture.sh
+
+[Install]
+WantedBy=multi-user.target
