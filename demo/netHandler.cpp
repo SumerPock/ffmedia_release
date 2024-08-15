@@ -16,7 +16,7 @@
 
 #include "netHandler.hpp"
 
-
+/// @brief 静态变量，用于统计处理的GPS和设备包数量
 uint32_t NetHandler::gpsPackets = 0;
 uint32_t NetHandler::devicePackets = 0;
 
@@ -53,16 +53,24 @@ typedef struct
 
 #pragma pack(pop)
 
-
+/// @brief NetHandler构造
+/// @param port
 NetHandler::NetHandler(uint16_t port)
-    : fd(-1), workFlag(false), workThread(nullptr), timeout(1000),
-      packet(nullptr), packetSize(1500), dataOutputMaxLines(0),
-      dataOutputCurLines(0), port(port)
+    : fd(-1),                // 文件描述符，初始化为-1，表示尚未打开
+      workFlag(false),       // 工作标志，初始化为false，表示尚未开始工作
+      workThread(nullptr),   // 工作线程指针，初始化为nullptr,表示线程尚未创建
+      timeout(1000),         // 超时时间，初始化为1000ms
+      packet(nullptr),       // 数据包指针
+      packetSize(1500),      // 数据包大小，初始化为1500字节，通常是网络数据包的最大传输单元（MTU）
+      dataOutputMaxLines(0), // 数据输出的最大行数，初始化为 0
+      dataOutputCurLines(0), // 当前数据输出的行数，初始化为 0
+      port(port)             // 端口号，初始化为传入的参数 port
 {
-    memset(&remotePoint, 0, sizeof remotePoint);
-    remotePoint.sin_family = AF_INET;
+    memset(&remotePoint, 0, sizeof remotePoint); // 将 remotePoint 结构体清零
+    remotePoint.sin_family = AF_INET;            // 设置 remotePoint 的地址族为 AF_INET（IPv4）
 }
 
+/// @brief NetHandler 析构
 NetHandler::~NetHandler()
 {
     stop();
@@ -73,11 +81,26 @@ NetHandler::~NetHandler()
         close(fd);
 }
 
+/// @brief 
+void NetHandler::stop()
+{
+    workFlag = false;   // 将工作标志设置为 false，指示停止工作
+    if (workThread)     // 如果工作线程已创建
+    {
+        workThread->join();   // 等待线程结束执行
+        delete workThread;    // 释放线程对象的内存
+        workThread = nullptr; // 将线程指针设为 nullptr，避免悬空指针
+    }
+}
+
 void NetHandler::setNetworkDevice(const std::string& dev)
 {
     netDev = dev;
 }
 
+/// @brief 设置并绑定UDP数据报套接字，准备接收网络数据包
+/// @param ip
+/// @param port
 void NetHandler::setRemoteDeviceInfo(const std::string& ip, uint16_t port)
 {
     struct in_addr ip_addr;
@@ -87,6 +110,9 @@ void NetHandler::setRemoteDeviceInfo(const std::string& ip, uint16_t port)
     remotePoint.sin_port = htons(port);
 }
 
+/// @brief 
+/// @param filename 
+/// @param maxLines 
 void NetHandler::setDataOutputFile(const std::string& filename, int maxLines)
 {
     dataOutputFile = filename;
@@ -112,18 +138,11 @@ int NetHandler::init()
 void NetHandler::start()
 {
     workFlag = true;
+    // workThread: 这是一个指向 std::thread 对象的指针，用于管理 NetHandler 的工作线程
     workThread = workThread ? workThread : new std::thread(&NetHandler::work, this);
 }
 
-void NetHandler::stop()
-{
-    workFlag = false;
-    if (workThread) {
-        workThread->join();
-        delete workThread;
-        workThread = nullptr;
-    }
-}
+
 
 void NetHandler::work()
 {
@@ -132,10 +151,10 @@ void NetHandler::work()
 
 void NetHandler::process()
 {
-    uint8_t* buf = packet;
-    size_t bufSize = packetSize;
-    struct sockaddr_in fromAddress;
-    int ret;
+    uint8_t* buf = packet;          //buf指向用于存储接收数据的缓冲区 packet
+    size_t bufSize = packetSize;    //
+    struct sockaddr_in fromAddress; //用于存储发送方的地址信息的 sockaddr_in 结构体
+    int ret;                        //ret 存储 readSocket 函数的返回值，即读取的数据长度
 
     if (fd < 0 || buf == nullptr) {
         workFlag = false;
@@ -143,10 +162,12 @@ void NetHandler::process()
     }
 
     while (workFlag) {
+        //循环处理接收的数据包
         ret = readSocket((char*)buf, bufSize, fromAddress, timeout);
         if (ret < (int)sizeof(FRAME_HEADER))
             continue;
 
+        //数据包头部校验
         FRAME_HEADER* f = (FRAME_HEADER*)buf;
         if (f->hh != 0xaaee)  // ee aa ~
             continue;
@@ -155,7 +176,8 @@ void NetHandler::process()
             printf("Receive frame too small: %d < %d\n", ret, f->len);
             continue;
         }
-
+        
+        //CRC校验
         uint16_t srcCrc = *(uint16_t*)(buf + f->len - 2);
         uint16_t dstCrc = calculateCRC16X25(buf, f->len - 2);
         if (srcCrc != dstCrc) {
@@ -163,6 +185,7 @@ void NetHandler::process()
             continue;
         }
 
+        //数据包保存到文件
         if (!dataOutputFile.empty()) {
             if (dataOutputCurLines >= dataOutputMaxLines) {
                 dataOutputTmpFile.assign(ptsToTimeStr(0, dataOutputFile.c_str()) + ".txt");
@@ -174,6 +197,7 @@ void NetHandler::process()
                 dataOutputCurLines++;
         }
 
+        //数据包类型处理
         switch (f->id) {
             case FRAME_ID_DEVICE:
                 processDeviceInfo(buf + sizeof(FRAME_HEADER), f->len - sizeof(FRAME_HEADER));
@@ -188,10 +212,14 @@ void NetHandler::process()
                 break;
         }
 
+        //发送心跳响应
         respondHeartbeatMsg(remotePoint);
     }
 }
 
+/// @brief 控制关机
+/// @param buf 
+/// @param bytes
 void NetHandler::processDeviceInfo(uint8_t* buf, size_t bytes)
 {
     const char* cmd;
@@ -210,6 +238,9 @@ void NetHandler::processDeviceInfo(uint8_t* buf, size_t bytes)
     return;
 }
 
+/// @brief 控制摄录程序开启/关闭/重启
+/// @param buf 
+/// @param bytes 
 void NetHandler::processOsdInfo(uint8_t* buf, size_t bytes)
 {
     const char* cmd;
@@ -220,7 +251,9 @@ void NetHandler::processOsdInfo(uint8_t* buf, size_t bytes)
         cmd = "systemctl stop ffmedia-capture.service";
     else if (buf[0] == 1)
         cmd = "systemctl start ffmedia-capture.service";
-    else
+    else if（buf[0] == 2）
+        cmd = "systemctl restart ffmedia-capture.service";
+    else    
         return;
 
     printf("Start running command: %s\n", cmd);
@@ -228,6 +261,9 @@ void NetHandler::processOsdInfo(uint8_t* buf, size_t bytes)
     return;
 }
 
+/// @brief IP地址修改
+/// @param buf 
+/// @param bytes 
 void NetHandler::processIPInfo(uint8_t* buf, size_t bytes)
 {
     if (bytes < sizeof(IP_CONFIG))
@@ -276,6 +312,8 @@ void NetHandler::processIPInfo(uint8_t* buf, size_t bytes)
     return;
 }
 
+/// @brief 响应来自远程设备的心跳消息，并将响应数据包发送回远程设备
+/// @param fromAddress
 void NetHandler::respondHeartbeatMsg(struct sockaddr_in& fromAddress)
 {
     NET_RESPOND_MSG msg;
@@ -287,6 +325,7 @@ void NetHandler::respondHeartbeatMsg(struct sockaddr_in& fromAddress)
     msg.tv = getUptime();
     msg.crc = calculateCRC16X25((const uint8_t*)&msg, msg.head.len - 2);
 
+    //发送心跳响应消息
     auto ret = writeSocket((char*)&msg, msg.head.len, fromAddress);
     if (ret != msg.head.len)
         printf("Failed to writeSocket: %d\n", ret);
@@ -297,6 +336,8 @@ void NetHandler::respondHeartbeatMsg(struct sockaddr_in& fromAddress)
 
 static int reuseFlag = 1;
 
+/// @brief 
+/// @return 
 int NetHandler::setupDatagramSock()
 {
     int newSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -420,8 +461,12 @@ uint16_t NetHandler::calculateCRC16X25(const uint8_t* data, size_t length)
     return crc ^ 0xFFFF;  // xor
 }
 
+/// @brief
+/// @param cmd 一个 C 字符串（const char*），表示要执行的命令
+/// @return
 int NetHandler::execCommand(const char* cmd)
 {
+    // system() 函数执行由 cmd 参数指定的命令，并将返回值存储在 status 变量中。
     auto status = system(cmd);
     if (status != 0) {
         //    if (status == -1 || (WIFEXITED(status) && WEXITSTATUS(status) == 127)) {

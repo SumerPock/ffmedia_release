@@ -90,6 +90,8 @@ TtyHandler::~TtyHandler()
 {
 }
 
+/// @brief 设置UART波特率
+/// @return 
 int TtyHandler::setSpeed()
 {
     int i, status;
@@ -113,6 +115,8 @@ int TtyHandler::setSpeed()
     return -1;
 }
 
+/// @brief   配置串口参数，数据位，校验位，停止位，流控制
+/// @return 
 int TtyHandler::setParity()
 {
     struct termios options;
@@ -189,6 +193,8 @@ int TtyHandler::setParity()
     return 0;
 }
 
+/// @brief  串口打开
+/// @return 
 int TtyHandler::open()
 {
     int newFd = ::open(device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
@@ -202,6 +208,11 @@ int TtyHandler::open()
     return newFd;
 }
 
+/// @brief 用于从文件描述符 fd 中读取指定数量的字节数据到缓冲区 buffer。
+///        它通过循环读取数据并处理可能发生的错误，以确保在可能的情况下尽量读取完整的数据
+/// @param buffer   目标缓冲区的指针，数据将会被读取到这个缓冲区中
+/// @param n        需要读取的字节数
+/// @return
 ssize_t TtyHandler::readn(uint8_t* buffer, size_t n)
 {
     ssize_t num_read;
@@ -229,6 +240,11 @@ ssize_t TtyHandler::readn(uint8_t* buffer, size_t n)
     return to_read;
 }
 
+/// @brief 向文件描述符 fd 写入指定数量的字节数据。这个函数确保尽可能多地将数据写入，
+///        使在出现中断或部分写入的情况下，仍然尝试完成整个写操作
+/// @param buffer
+/// @param n
+/// @return
 ssize_t TtyHandler::writen(const uint8_t* buffer, size_t n)
 {
     ssize_t num_write;
@@ -251,7 +267,8 @@ ssize_t TtyHandler::writen(const uint8_t* buffer, size_t n)
     return to_write;
 }
 
-
+/// @brief   初始化串口通信的相关配置
+/// @return  
 int TtyHandler::init()
 {
     if (fd > 0)
@@ -282,7 +299,10 @@ int TtyHandler::init()
     return 0;
 }
 
-
+/// @brief 处理 GPS 数据包，将其解析为结构化数据，并根据解析出的时间信息调整系统时间
+/// @param buf
+/// @param bytes
+/// @return
 int TtyHandler::processGpsInfo(uint8_t* buf, size_t bytes)
 {
     GpsInfo info;
@@ -331,11 +351,17 @@ int TtyHandler::processGpsInfo(uint8_t* buf, size_t bytes)
     return 0;
 }
 
+/// @brief 无任何意义 
+/// @param buf 
+/// @param bytes 
+/// @return 
 int TtyHandler::processDeviceInfo(uint8_t* buf, size_t bytes)
 {
     return 0;
 }
 
+/// @brief  创建和发送一个心跳响应消息
+/// @return
 int TtyHandler::respondHeartbeatMsg()
 {
     uint8_t buf[128];
@@ -358,9 +384,12 @@ int TtyHandler::respondHeartbeatMsg()
     msg.ipv4_addr = netDev.empty() ? 0xFFFFFFFF : getLocalIPAddressUint(netDev.c_str());
     memcpy(buf + pos, (void*)&msg, sizeof msg);
     pos += sizeof msg;
+
+    //计算并
     uint16_t crc = calculateCRC16X25(buf, frame_size - 2);
     *(uint16_t*)(buf + pos) = crc;
 
+    //消息发送
     if (writen(buf, frame_size) != frame_size)
         return -1;
 
@@ -375,6 +404,11 @@ int TtyHandler::respondHeartbeatMsg()
 // data
 // crc 		crc-16 	X25
 
+/// @brief 从串口读取数据帧，进行校验和解析，然后根据数据帧的类型（如 GPS 信息或设备信息）
+///        调用相应的处理函数，并返回心跳消息。它还会将处理过的数据保存到文件中
+/// @param buf
+/// @param bytes
+/// @return
 void TtyHandler::process()
 {
     uint8_t* buf = packet;
@@ -391,6 +425,8 @@ void TtyHandler::process()
         pos = 0;
         readLen = 1;
         frameSize = 0;
+
+        //读取并验证帧头部分
         ret = readn(buf + pos, readLen);
         if (ret != readLen || buf[pos] != 0xFF)
             continue;
@@ -408,17 +444,21 @@ void TtyHandler::process()
         frameSize = buf[pos];
         pos += ret;
         readLen = frameSize - pos;
+
+        //检查帧大小是否合法
         if ((size_t)frameSize > bufSize || readLen <= 0) {
             printf("Erron: frame_size: %d, pos: %d\n", frameSize, pos);
             continue;
         }
 
+        //读取完整的帧内容
         ret = readn(buf + pos, readLen);
         if (ret != readLen) {
             printf("Failed to read %d buf : %d\n", readLen, ret);
             continue;
         }
 
+        //校验CRC
         int crcPos = pos + readLen - 2;
         uint16_t srcCrc = *(uint16_t*)(buf + crcPos);
         uint16_t dstCrc = calculateCRC16X25(buf, frameSize - 2);
@@ -427,7 +467,7 @@ void TtyHandler::process()
             continue;
         }
 
-        // data ID
+        // data ID 根据数据ID处理数据
         switch (buf[pos++]) {
             case TTY_DATA_ID_GPS:  // gps info
                 processGpsInfo(buf + pos, readLen - 1);
@@ -440,9 +480,9 @@ void TtyHandler::process()
             default:
                 break;
         }
-
+        //发送心跳信息
         respondHeartbeatMsg();
-
+        //将数据保存到文件
         if (!dataOutputFile.empty()) {
             if (dataOutputCurLines >= dataOutputMaxLines) {
                 dataOutputTmpFile.assign(ptsToTimeStr(0, dataOutputFile.c_str()) + ".txt");
@@ -457,6 +497,7 @@ void TtyHandler::process()
 
     return;
 }
+
 
 void TtyHandler::setDataOutputFile(const std::string& filename, int maxLines)
 {

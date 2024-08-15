@@ -19,10 +19,11 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
-
-
 #include "system_common.hpp"
 
+/// @brief 获取给定文件路径所在磁盘的可用空间大小
+/// @param file_name
+/// @return
 uint64_t getSystemFreeSize(const char* file_name)
 {
     uint64_t size = 0;
@@ -41,7 +42,9 @@ uint64_t getSystemFreeSize(const char* file_name)
     return size;
 }
 
-
+/// @brief  删除给定目录中最旧的文件
+/// @param file_path
+/// @return
 int removeDirectoryOldestFile(const char* file_path)
 {
     char *dirc = NULL, *dname;
@@ -96,6 +99,9 @@ int removeDirectoryOldestFile(const char* file_path)
     return 0;
 }
 
+/// @brief 创建一个目录（包括所有需要的父目录）。
+/// @param dir
+/// @return
 static int mkdirP(const char* dir)
 {
     char tmp[PATH_MAX];
@@ -126,6 +132,9 @@ static int mkdirP(const char* dir)
     return ret;
 }
 
+/// @brief 创建一个目录及其父目录（如果它们不存在）
+/// @param path
+/// @return
 int createDirectory(const char* path)
 {
     char *dirc = NULL, *dname;
@@ -146,6 +155,9 @@ int createDirectory(const char* path)
     return ret;
 }
 
+/// @brief 获取指定网络接口的本地IP地址
+/// @param const char* interface
+/// @return
 std::string getLocalIPAddress(const char* interface)
 {
     int fd = -1;
@@ -168,6 +180,11 @@ std::string getLocalIPAddress(const char* interface)
     return ip_addr;
 }
 
+/// @brief 向网络广播消息
+/// @param port
+/// @param message
+/// @param
+/// @return
 int sendBroadcastMessage(int port, const char* message, const char* interface)
 {
     int ret;
@@ -265,6 +282,11 @@ std::vector<std::string> readFileLines(const char* file_name, time_t* mtime)
     return v;
 }
 
+/// @brief 读取文件的指定行，或者将文件内容存入std::vector<std::string>
+/// @param file_name
+/// @param mtime
+/// @param v
+/// @return
 int readFileLines(const char* file_name, time_t* mtime, std::vector<std::string>& v)
 {
     int ret = -1;
@@ -299,6 +321,10 @@ int readFileLines(const char* file_name, time_t* mtime, std::vector<std::string>
     return count;
 }
 
+/// @brief 将时间戳转换为格式化的时间字符串
+/// @param pts 
+/// @param format 
+/// @return
 std::string ptsToTimeStr(int64_t pts, const std::string& format)
 {
     const int buf_len = 512;
@@ -323,6 +349,9 @@ std::string ptsToTimeStr(int64_t pts, const std::string& format)
     return time_mstr;
 }
 
+/// @brief 读取文件的全部内容并返回 
+/// @param url 
+/// @return
 char* readFile(const char* url)
 {
     char* fileContext = NULL;
@@ -346,6 +375,9 @@ char* readFile(const char* url)
     return fileContext;
 }
 
+
+/// @brief 获取系统启动以来的时间(单位：秒)
+/// @return 
 uint32_t getUptime()
 {
     uint32_t uptime;
