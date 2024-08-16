@@ -613,8 +613,12 @@ void ModuleOsd::osdProcess()
     }
 }
 
+/// @brief 回调函数，用于处理视频流中的每一帧数据，并在帧上叠加OSD（On-Screen Display）信息。这些信息可以包括文本、帧率、时间戳
+/// @param arg
+/// @param media_buf
 void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media_buf)
 {
+    //回调函数初始化
     ModuleOsd* osd = (ModuleOsd*)arg;
     shared_ptr<VideoBuffer> buf = static_pointer_cast<VideoBuffer>(media_buf);
 
@@ -622,13 +626,17 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
     auto start = std::chrono::high_resolution_clock::now();
 #endif
 
+    //图像数据准备
     void* ptr = buf->getActiveData();
     uint32_t width = buf->getImagePara().hstride;
     uint32_t height = buf->getImagePara().vstride;
     cv::Mat mat(cv::Size(width, height), CV_8UC3, ptr);
+    
+    //文本绘制准备
     cv::Point point = osd->para.osdTextPara.point;
     int line_h = osd->para.LineStep;
     {
+        //绘制OSD文本
         std::lock_guard<std::mutex> lk(osd->text_mtx);
         int etc_count = osd->osd_text.size();
         for (int i = 0; i < etc_count; i++) {
@@ -637,22 +645,37 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
             point.y += line_h;
         }
     }
+
+    //帧率绘制
     if (!osd->para.osdFps.empty()) {
         char text[256];
         if (snprintf(text, sizeof text, osd->para.osdFps.c_str(),
                      1000000 / (buf->getPUstimestamp() - osd->current_pts)
                          + osd->para.osdFpsDiff)
             > 0) {
-            putText(mat, text, point, osd->para.osdTextPara.fontFace,
-                    osd->para.osdTextPara.fontScale, osd->para.osdTextPara.color);
+            putText(mat, 
+                    text, 
+                    point, 
+                    osd->para.osdTextPara.fontFace,
+                    osd->para.osdTextPara.fontScale, 
+                    osd->para.osdTextPara.color);
             point.y += line_h;
         }
     }
 
+    //绘制时间戳
     if (!osd->para.osdTime.empty())
-        putText(mat, ptsToTimeStr(0, osd->para.osdTime.c_str()), point, osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale, osd->para.osdTextPara.color);
+    {
+        putText(mat, 
+                ptsToTimeStr(0, osd->para.osdTime.c_str()), 
+                point, 
+                osd->para.osdTextPara.fontFace,
+                osd->para.osdTextPara.fontScale, 
+                osd->para.osdTextPara.color);
+    }
 
+
+    //更新当前时间戳
     osd->current_pts = buf->getPUstimestamp();
     buf->invalidateDrmBuf();
 
@@ -661,6 +684,7 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
     ff_info("duration %ld\n", std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
 #endif
 
+    //条件触发事件
     if (osd->start_pts < 0)
         osd->start_pts = osd->current_pts;
     else if (osd->para.fMaxDuration && osd->current_pts - osd->start_pts > osd->para.fMaxDuration) {

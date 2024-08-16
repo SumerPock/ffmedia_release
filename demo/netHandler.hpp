@@ -6,6 +6,10 @@
 #include <string>
 #include <thread>
 
+#include <thread>
+#include <atomic>
+#include <mutex>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -29,6 +33,10 @@ public:
 
 protected:
     void work();
+
+    void startHeartbeatThread();  // 启动心跳包发送线程
+    void stopHeartbeatThread();   // 停止心跳包发送线程
+
     virtual void process();
 
     uint16_t calculateCRC16X25(const uint8_t* data, size_t length);
@@ -46,6 +54,12 @@ private:
     int readSocket(char* buffer, unsigned bufferSize, struct sockaddr_in& fromAddress);
     int readSocket(char* buffer, unsigned bufferSize, struct sockaddr_in& fromAddress, int timeout);
     int writeSocket(char* buffer, unsigned int bufferSize, sockaddr_in& toAddress);
+
+    void heartbeatLoop();  // 心跳包发送的循环函数
+
+    std::thread heartbeatThread;  // 心跳包线程
+    std::atomic<bool> heartbeatThreadRunning;  // 控制线程运行的标志
+    std::mutex heartbeatMutex;    // 保护线程安全的互斥锁
 
 protected:
     int fd;

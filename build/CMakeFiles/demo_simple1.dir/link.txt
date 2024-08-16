@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -Wall -fPIC -s   CMakeFiles/demo_simple1.dir/demo/demo_simple1.cpp.o  -o demo_simple1   -L/home/firefly/ffmedia_release/lib  -Wl,-rpath,/home/firefly/ffmedia_release/lib: -lff_media 

@@ -1,0 +1,17 @@
+/home/firefly/ffmedia_release/build/CMakeFiles/install/local.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/install.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_simple.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_simple1.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_multi_drmplane.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/list_install_components.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_osd.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/install/strip.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_comm.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_memory_read.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_opencv.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_opencv_multi.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_rgablend.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/demo_multi_window.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/edit_cache.dir
+/home/firefly/ffmedia_release/build/CMakeFiles/rebuild_cache.dir

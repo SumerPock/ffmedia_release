@@ -161,8 +161,14 @@ void NetHandler::process()
         return;
     }
 
-    while (workFlag) {
-        //循环处理接收的数据包
+    // 启动心跳包线程
+    startHeartbeatThread();
+
+    while (workFlag) 
+    {
+
+        int timeout = 10; // 10ms 超时时间
+        // 循环处理接收的数据包
         ret = readSocket((char*)buf, bufSize, fromAddress, timeout);
         if (ret < (int)sizeof(FRAME_HEADER))
             continue;
@@ -213,8 +219,10 @@ void NetHandler::process()
         }
 
         //发送心跳响应
-        respondHeartbeatMsg(remotePoint);
+        //respondHeartbeatMsg(remotePoint);
     }
+    // 停止心跳包线程
+    stopHeartbeatThread();
 }
 
 /// @brief 控制关机
@@ -251,7 +259,7 @@ void NetHandler::processOsdInfo(uint8_t* buf, size_t bytes)
         cmd = "systemctl stop ffmedia-capture.service";
     else if (buf[0] == 1)
         cmd = "systemctl start ffmedia-capture.service";
-    else if（buf[0] == 2）
+    else if (buf[0] == 2)
         cmd = "systemctl restart ffmedia-capture.service";
     else    
         return;
@@ -422,6 +430,55 @@ int NetHandler::writeStringToFile(const std::string& filename, const std::string
     outFile << line << std::endl;
     file.close();
     return 0;
+}
+
+// 心跳包发送的循环函数
+void NetHandler::heartbeatLoop()
+{
+    auto lastHeartbeat = std::chrono::steady_clock::now();
+    static unsigned char loop = 0;
+
+    while (heartbeatThreadRunning)
+    {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastHeartbeat);
+
+        if (elapsed.count() >= 500)
+        { // 500ms周期
+            std::lock_guard<std::mutex> lock(heartbeatMutex);
+
+            if (loop == 0)
+            {
+                //sendHeartbeatMsg();
+                loop = 1;
+            }
+            else if (loop == 1)
+            {
+                respondHeartbeatMsg(remotePoint);
+                loop = 0;
+            }
+            lastHeartbeat = now;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 减少CPU占用
+    }
+}
+
+// 启动心跳包发送线程
+void NetHandler::startHeartbeatThread()
+{
+    heartbeatThreadRunning = true;
+    heartbeatThread = std::thread(&NetHandler::heartbeatLoop, this);
+}
+
+// 停止心跳包发送线程
+void NetHandler::stopHeartbeatThread()
+{
+    heartbeatThreadRunning = false;
+    if (heartbeatThread.joinable())
+    {
+        heartbeatThread.join();
+    }
 }
 
 uint32_t crc16_x25_table1[256] = {0x0, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,

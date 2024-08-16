@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -Wall -fPIC -s   CMakeFiles/demo_multi_window.dir/demo/demo_multi_window.cpp.o  -o demo_multi_window   -L/home/firefly/ffmedia_release/lib  -Wl,-rpath,/home/firefly/ffmedia_release/lib: -lff_media 

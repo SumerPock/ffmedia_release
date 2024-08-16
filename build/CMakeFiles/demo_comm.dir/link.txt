@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -Wall -fPIC -s   CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o CMakeFiles/demo_comm.dir/demo/ini.c.o CMakeFiles/demo_comm.dir/demo/system_common.cpp.o  -o demo_comm   -L/home/firefly/ffmedia_release/lib  -Wl,-rpath,/home/firefly/ffmedia_release/lib -lpthread 
