@@ -4,6 +4,137 @@
 #include <vector>
 #include <string.h>
 
+#include <mutex>    // 使用std::mutex进行线程同步
+#include <chrono>   // 用于时间计算
+#include <memory>   // 使用std::shared_ptr
+#include <cstdio>   // 使用snprintf
+#include <fstream>  // 用于文件读取
+#include <vector>   // 用于存储多个温度值
+#include <string>   // 用于字符串操作
+#include <dirent.h> // 使用POSIX标准库中的dirent.h进行目录遍历
+#include <cstring>  // 使用strstr函数
+#include <sys/statvfs.h> // 用于获取文件系统信息
+#include <cstdlib>       // 使用system函数调用shell命令
+
+std::chrono::steady_clock::time_point last_update_time = std::chrono::steady_clock::now();
+std::string cached_ssd_info = "";
+double cached_cpu_temp = -1;
+std::pair<double, double> cached_filesystem_usage = {-1, -1};
+
+double getAverageCpuTemperature();
+
+// 检查系统中是否存在挂载的SSD
+std::string checkSsdMounted(std::string &mount_path)
+{
+    FILE *pipe = popen("lsblk -d -o NAME,ROTA", "r"); // 执行命令获取设备信息
+    if (!pipe)
+        return ""; // 如果命令执行失败，返回空字符串
+
+    char buffer[256];
+    std::string result = "";
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+    {
+        std::string line(buffer);
+        // 清除行末尾的换行符
+        line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
+        std::istringstream iss(line);
+        std::string name, rota;
+
+        if (iss >> name >> rota && rota == "0") // 只提取设备名和ROTA为0的设备
+        {
+            if (name.find("nvme") != std::string::npos || name.find("sd") != std::string::npos)
+            {
+                result = name;                        // 只保留设备名
+                mount_path = "/home/firefly/ssdvideo"; // 使用指定的挂载路径
+                break;                                // 找到SSD后跳出循环
+            }
+        }
+    }
+    pclose(pipe);
+    return result; // 返回找到的设备信息，或者空字符串表示未找到
+}
+
+// 获取文件系统的容量和未使用容量
+std::pair<double, double> getFilesystemUsage(const std::string &mount_path)
+{
+    struct statvfs stat;
+    if (statvfs(mount_path.c_str(), &stat) == 0)
+    {
+        double total = (double)stat.f_blocks * stat.f_frsize / (1024 * 1024 * 1024); // 总容量 (GB)
+        double free = (double)stat.f_bfree * stat.f_frsize / (1024 * 1024 * 1024);   // 可用容量 (GB)
+        return {total, free};
+    }
+    return {-1, -1}; // 返回错误
+}
+
+// 使用smartctl工具获取SSD温度
+/*
+int getSsdTemperature(const std::string &device_name)
+{
+    char buffer[128];
+    std::string command = "sudo smartctl -A " + device_name + " | grep Temperature_Celsius | awk '{print $10}'";
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe)
+        return -1;
+    fgets(buffer, sizeof(buffer), pipe);
+    pclose(pipe);
+    return atoi(buffer); // 转换为整数
+}
+*/
+
+// 使用 smartctl 工具获取 NVMe SSD 温度
+int getSsdTemperature(const std::string &device_name)
+{
+    char buffer[128];
+    /// dev/nvme0n1
+    //std::string command = "sudo smartctl -a " + device_name + " | grep -i 'Temperature Sensor 1' | awk '{print $4}'";
+    std::string command = "sudo smartctl -a /dev/nvme0n1 | grep -i 'Temperature Sensor 1' | awk '{print $4}'";
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe)
+        return -1;
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+    {
+        pclose(pipe);
+        return atoi(buffer); // 将读取的温度值转换为整数
+    }
+    else
+    {
+        pclose(pipe);
+        return -1; // 如果未能读取到温度值，返回 -1
+    }
+}
+
+// 更新缓存的OSD数据
+void updateOSDData()
+{
+    std::string mount_path = "/home/firefly/ssdvideo"; // 使用指定的挂载路径
+    cached_ssd_info = checkSsdMounted(mount_path);    // 更新SSD信息
+    cached_cpu_temp = getAverageCpuTemperature();     // 更新CPU温度
+    if (!cached_ssd_info.empty())
+    { // 检查cached_ssd_info 是否不为空（即存在已挂载的SSD）
+        
+        //std::string device_name = cached_ssd_info.substr(0, cached_ssd_info.find(' '));
+
+        // 提取设备名称，只取第一部分，不含空格和ROTA标志
+        std::istringstream iss(cached_ssd_info);
+        std::string device_name;
+        iss >> device_name; // 仅提取设备名称部分
+
+        cached_filesystem_usage = getFilesystemUsage(mount_path); // 使用指定的挂载路径
+        int ssdTemp = getSsdTemperature(device_name);
+        printf("ssdTemp = %d", ssdTemp);
+
+        if (ssdTemp > 0)
+        {
+            cached_ssd_info += " Temp: " + std::to_string(ssdTemp) + "C";
+        }
+        else
+        {
+            cached_ssd_info += " Tc: N/A";
+        }
+    }
+}
+
 static void parseVDev(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.vDev;
@@ -511,10 +642,16 @@ int ModuleOsd::init()
             ff_error("Failed to init push rga\n");
             return ret;
         }
-
+        
+        /*
         enc_r = make_shared<ModuleMppEnc>(ENCODE_TYPE_H264,
                                           para.pFps, 
                                           para.pFps << 1, 
+                                          (para.pFps / 30.0) * 2048);
+        */
+        enc_r = make_shared<ModuleMppEnc>(ENCODE_TYPE_H265,
+                                          para.pFps,
+                                          para.pFps << 1,
                                           (para.pFps / 30.0) * 2048);
         enc_r->setProductor(push_rga);
         enc_r->setBufferCount(6);
@@ -682,13 +819,65 @@ void ModuleOsd::osdProcess()
     }
 }
 
+// 获取所有CPU核心的温度并计算平均温度
+double getAverageCpuTemperature()
+{
+    std::vector<double> temperatures; // 用于存储所有核心的温度
+
+    DIR *dir;
+    struct dirent *entry;
+
+    // 打开目录
+    dir = opendir("/sys/class/thermal/");
+    if (dir == nullptr)
+    {
+        return -1; // 如果无法打开目录，返回错误
+    }
+
+    // 遍历目录中的所有文件
+    while ((entry = readdir(dir)) != nullptr)
+    {
+        if (strstr(entry->d_name, "thermal_zone") != nullptr)
+        { // 找到thermal_zone文件夹
+            std::string path = "/sys/class/thermal/";
+            path += entry->d_name;
+            path += "/temp";
+
+            std::ifstream file(path);
+            if (file)
+            {
+                double temp;
+                file >> temp;                          // 读取温度数据
+                temperatures.push_back(temp / 1000.0); // 转换为摄氏度并存储
+            }
+        }
+    }
+
+    closedir(dir); // 关闭目录
+
+    // 计算温度平均值
+    if (!temperatures.empty())
+    {
+        double sum = 0.0;
+        for (double temp : temperatures)
+        {
+            sum += temp;
+        }
+        return sum / temperatures.size(); // 返回平均温度
+    }
+
+    return -1; // 如果没有读取到温度数据，则返回-1
+}
+
 /// @brief 回调函数，用于处理视频流中的每一帧数据，并在帧上叠加OSD（On-Screen Display）信息。这些信息可以包括文本、帧率、时间戳
 /// @param arg
 /// @param media_buf
 void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media_buf)
 {
     //回调函数初始化
-    ModuleOsd* osd = (ModuleOsd*)arg;
+    ModuleOsd *osd = (ModuleOsd *)arg; // 将arg转换为ModuleOsd类型得到OSD模块的实例
+
+    // 将media_buf强制转换为VideoBuffer类型以便访问视频帧数
     shared_ptr<VideoBuffer> buf = static_pointer_cast<VideoBuffer>(media_buf);
 
 #ifdef TEST_DURATION
@@ -696,19 +885,22 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
 #endif
 
     //图像数据准备
-    void* ptr = buf->getActiveData();
-    uint32_t width = buf->getImagePara().hstride;
-    uint32_t height = buf->getImagePara().vstride;
+    void *ptr = buf->getActiveData(); // 使用 buf->getActiveData() 获取当前视频帧的有效数据指针
+    uint32_t width = buf->getImagePara().hstride;//获取视频帧的高度
+    uint32_t height = buf->getImagePara().vstride;//获取视频帧的宽度
+    // 使用opencv的cv:Mat构造一个矩阵对象mat,该对象表示当前视频帧，用于后续的图像处理（如文本叠加）
     cv::Mat mat(cv::Size(width, height), CV_8UC3, ptr);
     
     //文本绘制准备
-    cv::Point point = osd->para.osdTextPara.point;
-    int line_h = osd->para.LineStep;
+    cv::Point point = osd->para.osdTextPara.point;//初始化文本起始绘制位置point
+    int line_h = osd->para.LineStep;//初始化行高
     {
         //绘制OSD文本
-        std::lock_guard<std::mutex> lk(osd->text_mtx);
+        std::lock_guard<std::mutex> lk(osd->text_mtx); // 使用 std::lock_guard 锁保护多线程环境下的文本数据访问
         int etc_count = osd->osd_text.size();
-        for (int i = 0; i < etc_count; i++) {
+        for (int i = 0; i < etc_count; i++)
+        { // 遍历 osd_text 列表，并在视频帧上逐行绘制文本
+          // 其中putText 是 OpenCV 的函数，用于在图像上绘制文本。参数包括目标图像矩阵、文本内容、起始坐标、字体类型、字体大小和颜色等
             putText(mat, 
                     osd->osd_text[i], 
                     point, 
@@ -720,12 +912,19 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
     }
 
     //帧率绘制
-    if (!osd->para.osdFps.empty()) {
+    if (!osd->para.osdFps.empty()) // 检查 osdFps 参数是否为空
+    {
         char text[256];
-        if (snprintf(text, sizeof text, osd->para.osdFps.c_str(),
-                     1000000 / (buf->getPUstimestamp() - osd->current_pts)
-                         + osd->para.osdFpsDiff)
-            > 0) {
+        // 通过时间戳计算当前帧率，并将其格式化为字符串
+        if (snprintf(text, 
+                     sizeof text,
+                     osd->para.osdFps.c_str(),
+                     1000000 / (buf->getPUstimestamp() - osd->current_pts) + osd->para.osdFpsDiff) > 0) 
+        {
+            // 更新帧率绘制位置
+            point.x = 1500; // 设置x坐标为图像宽度的一半
+            point.y = 1050;    // 设置y坐标为行高
+
             putText(mat, 
                     text, 
                     point, 
@@ -737,31 +936,112 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
     }
 
     //绘制时间戳
-    if (!osd->para.osdTime.empty())
+    if (!osd->para.osdTime.empty()) // 检查 osdTime 参数是否为空
     {
-        putText(mat, 
-                ptsToTimeStr(0, osd->para.osdTime.c_str()), 
-                point, 
+        point.x = 10; // 设置x坐标为图像宽度的一半
+        point.y = 1050;  // 设置y坐标为行高
+        // 使用 putText 函数将时间戳信息绘制到视频帧上
+        putText(mat,
+                ptsToTimeStr(0, osd->para.osdTime.c_str()),
+                point,
                 osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale, 
+                osd->para.osdTextPara.fontScale,
                 osd->para.osdTextPara.color);
     }
 
+    // 检查是否需要更新OSD数据
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_time).count();
+    if (elapsed_time >= 10)
+    { // 每10秒更新一次
+        updateOSDData();
+        last_update_time = now; // 更新最后一次更新时间
+    }
+
+    // 获取并绘制CPU温度
+    //double cpuTemp = getAverageCpuTemperature();
+    if (cached_cpu_temp > 0)
+    { // 仅当成功获取到温度时才显示
+        char tempText[50];
+        snprintf(tempText, sizeof(tempText), "Avg CPU Temp: %.2fC", cached_cpu_temp);
+
+        point.x = 1000; // 设置x坐标为图像宽度的一半
+        point.y = 1050; // 设置y坐标为行高
+
+        putText(mat,
+                tempText,
+                point,
+                osd->para.osdTextPara.fontFace,
+                osd->para.osdTextPara.fontScale,
+                osd->para.osdTextPara.color);
+    }
+
+    // 检查SSD挂载状态
+    if (!cached_ssd_info.empty())
+    {
+        char ssdInfo[100];
+
+        /*
+        snprintf(ssdInfo, 
+                 sizeof(ssdInfo), 
+                "SSD Info: %s, %.2fG/%.2fG Free", 
+                cached_ssd_info.c_str(), 
+                cached_filesystem_usage.first, 
+                cached_filesystem_usage.second);
+        */
+
+        int ret = snprintf(ssdInfo,
+                           sizeof(ssdInfo),
+                           "SSD : %s, %.2fG/%.2fG Free",
+                           cached_ssd_info.c_str(),
+                           cached_filesystem_usage.first,
+                           cached_filesystem_usage.second);
+
+        if (ret < 0 || ret >= sizeof(ssdInfo))
+        {
+            // 错误处理：snprintf 失败或输出被截断
+            fprintf(stderr, "Failed to format SSD info or output was truncated.\n");
+        }
+
+        point.x = 500; // 设置x坐标为图像宽度的一半
+        point.y = 50;  // 设置y坐标为行高
+        putText(mat,
+                ssdInfo,
+                point,
+                osd->para.osdTextPara.fontFace,
+                osd->para.osdTextPara.fontScale,
+                osd->para.osdTextPara.color);
+    }
+    else
+    {
+        // SSD未挂载，显示-1
+        char ssdInfo[50];
+        snprintf(ssdInfo, sizeof(ssdInfo), "SSD: -1");
+        point.x = 500; // 设置x坐标为图像宽度的一半
+        point.y = 50;  // 设置y坐标为行高
+        putText(mat,
+                ssdInfo,
+                point,
+                osd->para.osdTextPara.fontFace,
+                osd->para.osdTextPara.fontScale,
+                osd->para.osdTextPara.color);
+    }
 
     //更新当前时间戳
-    osd->current_pts = buf->getPUstimestamp();
-    buf->invalidateDrmBuf();
+    osd->current_pts = buf->getPUstimestamp(); // 更新 current_pts 为当前帧的时间戳
+    buf->invalidateDrmBuf();                   // 调用 invalidateDrmBuf 方法标记缓冲区为无效
 
-#ifdef TEST_DURATION
+#ifdef TEST_DURATION //测试持续时间计算
     auto end = std::chrono::high_resolution_clock::now();
     ff_info("duration %ld\n", std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
 #endif
 
     //条件触发事件
-    if (osd->start_pts < 0)
+    if (osd->start_pts < 0) // 检查 start_pts 是否为负数，如果是，则初始化为当前时间戳
         osd->start_pts = osd->current_pts;
-    else if (osd->para.fMaxDuration && osd->current_pts - osd->start_pts > osd->para.fMaxDuration) {
-        std::lock_guard<std::mutex> lk(osd->event_mtx);
+    else if (osd->para.fMaxDuration && osd->current_pts - osd->start_pts > osd->para.fMaxDuration)
+    { // 如果 fMaxDuration 参数有效，且当前时间戳与起始时间戳之差大于 fMaxDuration，则触发事件
+        std::lock_guard<std::mutex> lk(osd->event_mtx); // 锁定互斥量，修改事件状态，通知等待的条件变量，然后更新起始时间戳
         osd->event |= 1;
         osd->event_conv.notify_one();
         osd->start_pts = osd->current_pts;
