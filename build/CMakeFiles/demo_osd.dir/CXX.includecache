@@ -180,6 +180,14 @@ module/module_media.hpp
 base/ff_type.hpp
 ../include/module/vp/base/ff_type.hpp
 
+/home/firefly/ffmedia_release/demo/demo_osd.cpp
+osd.hpp
+/home/firefly/ffmedia_release/demo/osd.hpp
+unistd.h
+-
+signal.h
+-
+
 /home/firefly/ffmedia_release/demo/osd.cpp
 osd.hpp
 /home/firefly/ffmedia_release/demo/osd.hpp

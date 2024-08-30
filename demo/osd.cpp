@@ -23,7 +23,9 @@ std::pair<double, double> cached_filesystem_usage = {-1, -1};
 
 double getAverageCpuTemperature();
 
-// 检查系统中是否存在挂载的SSD
+/// @brief 检查系统中是否存在挂载的SSD
+/// @param mount_path
+/// @return
 std::string checkSsdMounted(std::string &mount_path)
 {
     FILE *pipe = popen("lsblk -d -o NAME,ROTA", "r"); // 执行命令获取设备信息
@@ -67,21 +69,6 @@ std::pair<double, double> getFilesystemUsage(const std::string &mount_path)
     return {-1, -1}; // 返回错误
 }
 
-// 使用smartctl工具获取SSD温度
-/*
-int getSsdTemperature(const std::string &device_name)
-{
-    char buffer[128];
-    std::string command = "sudo smartctl -A " + device_name + " | grep Temperature_Celsius | awk '{print $10}'";
-    FILE *pipe = popen(command.c_str(), "r");
-    if (!pipe)
-        return -1;
-    fgets(buffer, sizeof(buffer), pipe);
-    pclose(pipe);
-    return atoi(buffer); // 转换为整数
-}
-*/
-
 // 使用 smartctl 工具获取 NVMe SSD 温度
 int getSsdTemperature(const std::string &device_name)
 {
@@ -108,8 +95,8 @@ int getSsdTemperature(const std::string &device_name)
 void updateOSDData()
 {
     std::string mount_path = "/home/firefly/ssdvideo"; // 使用指定的挂载路径
-    cached_ssd_info = checkSsdMounted(mount_path);    // 更新SSD信息
-    cached_cpu_temp = getAverageCpuTemperature();     // 更新CPU温度
+    cached_ssd_info = checkSsdMounted(mount_path);     // 更新SSD信息
+    cached_cpu_temp = getAverageCpuTemperature();      // 更新CPU温度
     if (!cached_ssd_info.empty())
     { // 检查cached_ssd_info 是否不为空（即存在已挂载的SSD）
         
@@ -135,33 +122,52 @@ void updateOSDData()
     }
 }
 
+/**以下是读取osd.conf配置 */
+
+/// @brief 读取配置文件中的视频节点
+/// @param lineStream 
+/// @param conf 
 static void parseVDev(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.vDev，即使用流提取操作符（>>）从 lineStream 中读取数据，并将其存储到 conf.vDev 中
     lineStream >> conf.vDev;
 }
 
+/// @brief 读取配置文件中的音频采集设备
+/// @param lineStream 
+/// @param conf 
 static void parseADev(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.aDev
     lineStream >> conf.aDev;
 }
 
+/// @brief 读取摄像头输入的图像宽高
+/// @param lineStream 
+/// @param conf 
 static void parseIImgPara(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取2个输入，并将其赋值给 conf.iPara.width 和  conf.iPara.height
     lineStream >> conf.iPara.width;
     lineStream >> conf.iPara.height;
 }
 
+/// @brief 读取图像分辨率
+/// @param lineStream 
+/// @param conf 
 static void parseOImgPara(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取2个输入，并将其赋值给 conf.oPara.width 和  conf.oPara.height
     lineStream >> conf.oPara.width;
     lineStream >> conf.oPara.height;
 }
 
+/// @brief 设置图像旋转角度
+/// @param lineStream 
+/// @param conf 
 static void parseORotate(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
-    int r = 0;
-    lineStream >> r;
+    int r = 0;//给定默认值0，设置为不旋转
+    lineStream >> r; // 该函数从 lineStream 中读取输入，并将其赋值给 r
     conf.oRotate = RgaRotate(r);
+    // 将读取到的 r 转换为 RgaRotate 枚举或类型，然后赋值给 conf 对象的 oRotate 成员
+    // 这意味着 RgaRotate 是一个枚举类型或自定义类型，代表某种编码类型
 }
 
 /// @brief 这段代码的主要目的是从 std::stringstream 中解析出一个字符串，并处理可能包含的引号。如果字符串是被双引号包围的，那么它会去除引号并提取其中的内容
@@ -186,186 +192,385 @@ static void parseTextString(std::stringstream& lineStream, std::string& str)
     }
 }
 
+/// @brief 设置叠加字符串
+/// @param lineStream 
+/// @param conf 
 static void parseOsdDevText(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdEtc
     parseTextString(lineStream, conf.osdDev);
 }
 
+/// @brief 其他叠加 OSD字符串的文件
+/// @param lineStream 
+/// @param conf 
 static void parseOsdEtcFile(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdEtc
     lineStream >> conf.osdEtc;
 }
 
+/// @brief 设置叠加 FPS字符串
+/// @param lineStream 
+/// @param conf 
 static void parseOsdFpsText(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdFps
     parseTextString(lineStream, conf.osdFps);
 }
 
+/// @brief 设置叠加FPS的差值
+/// @param lineStream 
+/// @param conf 
 static void parseOsdFpsDiff(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdFpsDiff
     lineStream >> conf.osdFpsDiff;
 }
 
+/// @brief 叠加时间字符串
+/// @param lineStream 
+/// @param conf 
 static void parseOsdTimeText(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     parseTextString(lineStream, conf.osdTime);
 }
 
+/// @brief 设置叠加字符串的参数
+/// @param lineStream
+/// @param conf
 static void parseOsdTextPara(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{   // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdTextPara.point.x
     lineStream >> conf.osdTextPara.point.x;
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdTextPara.point.y
     lineStream >> conf.osdTextPara.point.y;
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdTextPara.fontFace
     lineStream >> conf.osdTextPara.fontFace;
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.osdTextPara.fontScale
     lineStream >> conf.osdTextPara.fontScale;
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.sdTextPara.color.val[0]
     lineStream >> conf.osdTextPara.color.val[0];
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.sdTextPara.color.val[1]
     lineStream >> conf.osdTextPara.color.val[1];
+
+    // 该函数从 lineStream 中读取输入，并将其赋值给 conf.sdTextPara.color.val[2]
     lineStream >> conf.osdTextPara.color.val[2];
 }
 
-static void parseOsdTextLineStep(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
+/// @brief 设置叠加时间戳字符串的参数
+/// @param lineStream
+/// @param conf
+static void parseOsdTimestampPara(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.osdTimestampPara.point.x;
+    lineStream >> conf.osdTimestampPara.point.y;
+    lineStream >> conf.osdTimestampPara.fontFace;
+    lineStream >> conf.osdTimestampPara.fontScale;
+    lineStream >> conf.osdTimestampPara.color.val[0];
+    lineStream >> conf.osdTimestampPara.color.val[1];
+    lineStream >> conf.osdTimestampPara.color.val[2];
+}
+
+/// @brief 设置叠加fps信息字符串的参数
+/// @param lineStream
+/// @param conf
+static void parseOsdFpsPara(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.osdFpsPara.point.x;
+    lineStream >> conf.osdFpsPara.point.y;
+    lineStream >> conf.osdFpsPara.fontFace;
+    lineStream >> conf.osdFpsPara.fontScale;
+    lineStream >> conf.osdFpsPara.color.val[0];
+    lineStream >> conf.osdFpsPara.color.val[1];
+    lineStream >> conf.osdFpsPara.color.val[2];
+}
+
+/// @brief 设置cpu温度信息字符串的参数
+/// @param lineStream 
+/// @param conf 
+static void parseOsdCpuTempPara(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.osdCpuTempPara.point.x;
+    lineStream >> conf.osdCpuTempPara.point.y;
+    lineStream >> conf.osdCpuTempPara.fontFace;
+    lineStream >> conf.osdCpuTempPara.fontScale;
+    lineStream >> conf.osdCpuTempPara.color.val[0];
+    lineStream >> conf.osdCpuTempPara.color.val[1];
+    lineStream >> conf.osdCpuTempPara.color.val[2];
+}
+
+/// @brief 设置ssd温度及容量信息字符串参数
+/// @param lineStream 
+/// @param conf
+static void parseOsdSsdDatePara(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.osdSsdDatePara.point.x;
+    lineStream >> conf.osdSsdDatePara.point.y;
+    lineStream >> conf.osdSsdDatePara.fontFace;
+    lineStream >> conf.osdSsdDatePara.fontScale;
+    lineStream >> conf.osdSsdDatePara.color.val[0];
+    lineStream >> conf.osdSsdDatePara.color.val[1];
+    lineStream >> conf.osdSsdDatePara.color.val[2];
+}
+
+/// @brief 设置设备名称OSD信息字符串的参数
+/// @param lineStream 
+/// @param conf 
+static void parseOsdDevTextPara(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.osdDevTextPart.point.x;
+    lineStream >> conf.osdDevTextPart.point.y;
+    lineStream >> conf.osdDevTextPart.fontFace;
+    lineStream >> conf.osdDevTextPart.fontScale;
+    lineStream >> conf.osdDevTextPart.color.val[0];
+    lineStream >> conf.osdDevTextPart.color.val[1];
+    lineStream >> conf.osdDevTextPart.color.val[2];
+}
+
+    /// @brief 设置叠加字符串之间的行距
+    /// @param lineStream
+    /// @param conf
+    static void parseOsdTextLineStep(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
 {
     lineStream >> conf.LineStep;
 }
 
+/// @brief 编码类型指定
+/// @param lineStream 
+/// @param conf 
 static void parseEncType(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
-    int type = 1;
-    lineStream >> type;
+    int type = 1;       //初始赋值1，为了默认让其设置为H265模式
+    lineStream >> type; // 使用流提取运算符（>>）从 lineStream 中读取一个整数值，并存储到 type 变量中
     conf.eType = EncodeType(type);
+    // 将读取到的 type 转换为 EncodeType 枚举或类型，然后赋值给 conf 对象的 eType 成员
+    // 这意味着 eType 是一个枚举类型或自定义类型，代表某种编码类型
 }
 
+/// @brief 编码帧率设置
+/// @param lineStream 
+/// @param conf 
 static void parseEncFps(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.eFps
     lineStream >> conf.eFps;
 }
 
+/// @brief 指定文件录制最大时长
+/// @param lineStream 
+/// @param conf 
 static void parseFileMaxDuration(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.fMaxDuration
     lineStream >> conf.fMaxDuration;
     if (conf.fMaxDuration > 0) {
         conf.fMaxDuration *= 1000000;  // to s
     }
 }
 
+/// @brief 指定监控输出文件路径文件剩余大小字节，超过则输出该路径下最旧文件
+/// @param lineStream
+/// @param conf
 static void parseFileSystemFreeSize(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.fFreeSize
     lineStream >> conf.fFreeSize;
 }
 
+/// @brief 指定输出文件
+/// @param lineStream 
+/// @param conf 
 static void parseOutPutFile(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.oFile
     lineStream >> conf.oFile;
 }
 
+/// @brief 指定输出文件目录
+/// @param lineStream 
+/// @param conf 
 static void parseOutPutFileDir(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.oFileDir
     lineStream >> conf.oFileDir;
 }
 
+/// @brief 屏幕显示功能使能
+/// @param lineStream 
+/// @param conf 
 static void parseDisplayEnable(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.dDisplayEnable;
 }
 
+/// @brief 屏幕输出显示FPS设定
+/// @param lineStream 
+/// @param conf 
 static void parseDisplayFps(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.dDisplayFps
     lineStream >> conf.dDisplayFps;
 }
 
+/// @brief 音频播放使能
+/// @param lineStream
+/// @param conf
 static void parseAplayEnable(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.aPlayEnable;
 }
 
+/// @brief 指定音频播放的设备
+/// @param lineStream
+/// @param conf
 static void parseAplayDevice(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.aPlayDev;
 }
 
+/// @brief 设置指定图层设备
+/// @param lineStream 
+/// @param conf 
 static void parseDisplay(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取2个值，并将这些值存储到 conf 对象的 dDisplay 和 dDisplayConn 成员变量中
     lineStream >> conf.dDisplay >> conf.dDisplayConn;
 }
 
+/// @brief 设置屏幕限制区域
+/// @param lineStream 
+/// @param conf 
 static void parseDisplayCorp(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取4个值，并将这些值存储到 conf 对象的 dCorp.x , dCorp.y , dCorp.w , dCorp.h 成员变量中
     lineStream >> conf.dCorp.x >> conf.dCorp.y >> conf.dCorp.w >> conf.dCorp.h;
 }
 
+/// @brief 视频推流开关
+/// @param lineStream 
+/// @param conf 
 static void parsePushVideoEnable(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.pushVideoEnable
     lineStream >> conf.pushVideoEnable;
 }
 
+/// @brief 音频推流开关
+/// @param lineStream 
+/// @param conf 
 static void parsePushAudioEnable(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.pushAudioEnable;
 }
 
+/// @brief 设置推流帧率
+/// @param lineStream 
+/// @param conf 
 static void parsePushFps(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.pFps
     lineStream >> conf.pFps;
 }
 
+/// @brief 推流端口设置
+/// @param lineStream 
+/// @param conf 
 static void parsePushPort(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.pPort
     lineStream >> conf.pPort;
 }
 
+/// @brief 推流路径设置
+/// @param lineStream 
+/// @param conf 
 static void parsePushPath(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取输入，并将其赋值给 conf.pPath
     lineStream >> conf.pPath;
 }
 
+/// @brief 设置推流分辨率
+/// @param lineStream 
+/// @param conf 
 static void parsePushResolution(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
-{
+{ // 该函数从 lineStream 中读取2个输入，并将其赋值给 conf.pPara.width和conf.pPara.height
     lineStream >> conf.pPara.width >> conf.pPara.height;
 }
 
+/// @brief 
+/// @param lineStream 
+/// @param conf 
+static void parsePushcpuTempEnable(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.pushcpuTempEnable;
+}
+
+/// @brief 
+/// @param lineStream 
+/// @param conf 
+static void parsePushssdDataEnable(std::stringstream &lineStream, ModuleOsd::OsdConfPara &conf)
+{
+    lineStream >> conf.pushssdDataEnable;
+}
+
+/// @brief 广播ip地址
+/// @param lineStream 
+/// @param conf 
 static void parseBroadcastPort(std::stringstream& lineStream, ModuleOsd::OsdConfPara& conf)
 {
     lineStream >> conf.bPort;
 }
 
+static std::unordered_map<std::string, void (*)(std::stringstream &, ModuleOsd::OsdConfPara &)> osd_parsers = {
+    {"vDev", parseVDev},                         // 视频节点配置
+    {"aDev", parseADev},                         // 音频采集设置
+    {"iImgPara", parseIImgPara},                 // 设置摄像头输出图像宽高
+    {"oImgPara", parseOImgPara},                 // 设置调整图像分辨率
+    {"oRotate", parseORotate},                   // 设置图像旋转角度
+    {"osdDevText", parseOsdDevText},             // 设置叠加字符串
+    {"osdFpsText", parseOsdFpsText},             // 设置叠加fps字符串
+    {"osdFpsDiff", parseOsdFpsDiff},             // 设置叠加fps的差值
+    {"osdTimeText", parseOsdTimeText},           // 叠加时间字符串
+    {"osdEtcFile", parseOsdEtcFile},             // 其他叠加字符串的文件
+    {"osdTextPara", parseOsdTextPara},           // 设置叠加字符串的参数
+    {"osdLineStep", parseOsdTextLineStep},       // 设置叠加字符串之间行距
+    {"encType", parseEncType},                   // 指定编码类型
+    {"encFps", parseEncFps},                     // 指定编码帧率
+    {"fileMaxDuration", parseFileMaxDuration},   // 指定文件录制最大时长
+    {"systemFreeSize", parseFileSystemFreeSize}, // 指定监控输出文件路径文件剩余大小字节，超过则输出该路径下最旧文件
+    {"outputFile", parseOutPutFile},             // 指定输出文件路径
+    {"outputFileDir", parseOutPutFileDir},       // 指定输出文件目录
+    {"displayEnable", parseDisplayEnable},       // 屏幕显示开启关闭
+    {"aplayEnable", parseAplayEnable},           // 音频播放使能
+    {"aplayDev", parseAplayDevice},              // 音频播放设备
+    {"display", parseDisplay},                   // 设置指定图层设备
+    {"displayFps", parseDisplayFps},             // 设置屏幕显示帧率
+    {"displayCorp", parseDisplayCorp},           // 设置屏幕显示区域
+    {"pushVideoEnable", parsePushVideoEnable},   // 视频推流开关
+    {"pushAudioEnable", parsePushAudioEnable},   // 音频推流开关
+    {"pushFps", parsePushFps},                   // 推流帧率设置
+    {"pushPort", parsePushPort},                 // 推流端口设置
+    {"pushPath", parsePushPath},                 // 推流路径设置
+    {"pushPara", parsePushResolution},           // 设置推流分辨率
 
-static std::unordered_map<std::string, void (*)(std::stringstream&, ModuleOsd::OsdConfPara&)> osd_parsers = {
-    {"vDev", parseVDev},
-    {"aDev", parseADev},
-    {"iImgPara", parseIImgPara},
-    {"oImgPara", parseOImgPara},
-    {"oRotate", parseORotate},
-    {"osdDevText", parseOsdDevText},
-    {"osdFpsText", parseOsdFpsText},
-    {"osdFpsDiff", parseOsdFpsDiff},
-    {"osdTimeText", parseOsdTimeText},
-    {"osdEtcFile", parseOsdEtcFile},
-    {"osdTextPara", parseOsdTextPara},
-    {"osdLineStep", parseOsdTextLineStep},
-    {"encType", parseEncType},
-    {"encFps", parseEncFps},
-    {"fileMaxDuration", parseFileMaxDuration},
-    {"systemFreeSize", parseFileSystemFreeSize},
-    {"outputFile", parseOutPutFile},
-    {"outputFileDir", parseOutPutFileDir},
-    {"displayEnable", parseDisplayEnable},
-    {"aplayEnable", parseAplayEnable},
-    {"aplayDev", parseAplayDevice},
-    {"display", parseDisplay},
-    {"displayFps", parseDisplayFps},
-    {"displayCorp", parseDisplayCorp},
-    {"pushVideoEnable", parsePushVideoEnable},
-    {"pushAudioEnable", parsePushAudioEnable},
-    {"pushFps", parsePushFps},
-    {"pushPort", parsePushPort},
-    {"pushPath", parsePushPath},
-    {"pushPara", parsePushResolution},
-    {"broadcastPort", parseBroadcastPort}};
+    {"cpuTempEnable", parsePushcpuTempEnable}, // CPU温度信息
+    {"ssdDataEnable", parsePushssdDataEnable}, // SSD温度及容量信息
 
+    {"osdTimestampPara", parseOsdTimestampPara}, // osd时间戳的位置及字体
+    {"osdFpsPara", parseOsdFpsPara},             // osdfps的位置及字体
+    {"osdCpuTempPara", parseOsdCpuTempPara},     // CPU温度信息的位置及字体
+    {"osdSsdDatePara", parseOsdSsdDatePara},     // SSD容量及温度的位置及字体
+    {"osdDevTextPart", parseOsdDevTextPara},     // 设备信息的位置及字体
+    
+    {"broadcastPort", parseBroadcastPort}        // 广播IP地址端口
+};
 
 ModuleOsd::ModuleOsd(const std::string& filename)
-    : conf_file(filename), work_flag(false), work_thread(nullptr), etc_file_mtime(0), event(0),
-      time_out(3000), v_source(nullptr), a_source(nullptr), f_enc(nullptr), writer(nullptr),
-      r_enc(nullptr), rtsp(nullptr), display(nullptr), current_pts(-1), start_pts(-1)
+    : conf_file(filename), 
+      work_flag(false), 
+      work_thread(nullptr), 
+      etc_file_mtime(0), 
+      event(0),
+      time_out(3000), 
+      v_source(nullptr), 
+      a_source(nullptr), 
+      f_enc(nullptr), 
+      writer(nullptr),
+      r_enc(nullptr), 
+      rtsp(nullptr), 
+      display(nullptr), 
+      current_pts(-1), 
+      start_pts(-1)
 {
 }
 
@@ -690,8 +895,10 @@ int ModuleOsd::init()
     //文件写入模块与初始化
     if (!para.oFile.empty()) 
     {
-        enc = make_shared<ModuleMppEnc>(para.eType, para.eFps,
-                                        para.eFps << 1, (para.eFps / 30.0) * 2048);
+        enc = make_shared<ModuleMppEnc>(para.eType, 
+                                        para.eFps,
+                                        para.eFps << 1, 
+                                        (para.eFps / 30.0) * 2048);
         enc->setProductor(last_vmod);
         enc->setBufferCount(20);
         ret = enc->init();
@@ -898,7 +1105,20 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
         //绘制OSD文本
         std::lock_guard<std::mutex> lk(osd->text_mtx); // 使用 std::lock_guard 锁保护多线程环境下的文本数据访问
         int etc_count = osd->osd_text.size();
-        for (int i = 0; i < etc_count; i++)
+
+        //将文本文件中的OSD内容 和 设备编号OSD信息 分开显示
+        point.x = osd->para.osdDevTextPart.point.x;
+        point.y = osd->para.osdDevTextPart.point.y;
+        putText(mat,
+                osd->osd_text[0],
+                point,
+                osd->para.osdTextPara.fontFace,
+                osd->para.osdTextPara.fontScale,
+                osd->para.osdTextPara.color);
+
+        point.x = osd->para.osdTextPara.point.x;
+        point.y = osd->para.osdTextPara.point.y;
+        for (int i = 1; i < etc_count; i++)
         { // 遍历 osd_text 列表，并在视频帧上逐行绘制文本
           // 其中putText 是 OpenCV 的函数，用于在图像上绘制文本。参数包括目标图像矩阵、文本内容、起始坐标、字体类型、字体大小和颜色等
             putText(mat, 
@@ -909,6 +1129,8 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
                     osd->para.osdTextPara.color);
             point.y += line_h;
         }
+        
+        
     }
 
     //帧率绘制
@@ -922,15 +1144,18 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
                      1000000 / (buf->getPUstimestamp() - osd->current_pts) + osd->para.osdFpsDiff) > 0) 
         {
             // 更新帧率绘制位置
-            point.x = 1500; // 设置x坐标为图像宽度的一半
-            point.y = 1050;    // 设置y坐标为行高
+            //point.x = 1500; // 设置x坐标为图像宽度的一半
+            //point.y = 1050;    // 设置y坐标为行高
 
-            putText(mat, 
-                    text, 
-                    point, 
-                    osd->para.osdTextPara.fontFace,
-                    osd->para.osdTextPara.fontScale, 
-                    osd->para.osdTextPara.color);
+            point.x = osd->para.osdFpsPara.point.x;
+            point.y = osd->para.osdFpsPara.point.y;
+
+            putText(mat,
+                    text,
+                    point,
+                    osd->para.osdFpsPara.fontFace,
+                    osd->para.osdFpsPara.fontScale,
+                    osd->para.osdFpsPara.color);
             point.y += line_h;
         }
     }
@@ -938,18 +1163,22 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
     //绘制时间戳
     if (!osd->para.osdTime.empty()) // 检查 osdTime 参数是否为空
     {
-        point.x = 10; // 设置x坐标为图像宽度的一半
-        point.y = 1050;  // 设置y坐标为行高
+        //point.x = 10; // 设置x坐标为图像宽度的一半
+        //point.y = 1050;  // 设置y坐标为行高
+        point.x = osd->para.osdTimestampPara.point.x;
+        point.y = osd->para.osdTimestampPara.point.y;
+
         // 使用 putText 函数将时间戳信息绘制到视频帧上
         putText(mat,
                 ptsToTimeStr(0, osd->para.osdTime.c_str()),
                 point,
-                osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale,
-                osd->para.osdTextPara.color);
+                osd->para.osdTimestampPara.fontFace,
+                osd->para.osdTimestampPara.fontScale,
+                osd->para.osdTimestampPara.color);
     }
 
-    // 检查是否需要更新OSD数据
+
+    // 检查是否需要更新OSD数据 
     auto now = std::chrono::steady_clock::now();
     auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_time).count();
     if (elapsed_time >= 10)
@@ -960,24 +1189,28 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
 
     // 获取并绘制CPU温度
     //double cpuTemp = getAverageCpuTemperature();
-    if (cached_cpu_temp > 0)
+    if (cached_cpu_temp > 0 && osd->para.pushcpuTempEnable == true)
+    //if (cached_cpu_temp > 0 && para.pushcpuTempEnable == true)
+    //if (cached_cpu_temp > 0 && instance->para.pushcpuTempEnable == true)
     { // 仅当成功获取到温度时才显示
         char tempText[50];
         snprintf(tempText, sizeof(tempText), "Avg CPU Temp: %.2fC", cached_cpu_temp);
 
-        point.x = 1000; // 设置x坐标为图像宽度的一半
-        point.y = 1050; // 设置y坐标为行高
-
+        //point.x = 1000; // 设置x坐标为图像宽度的一半
+        //point.y = 1050; // 设置y坐标为行高
+        point.x = osd->para.osdCpuTempPara.point.x;
+        point.y = osd->para.osdCpuTempPara.point.y;
         putText(mat,
                 tempText,
                 point,
-                osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale,
-                osd->para.osdTextPara.color);
+                osd->para.osdCpuTempPara.fontFace,
+                osd->para.osdCpuTempPara.fontScale,
+                osd->para.osdCpuTempPara.color);
     }
 
     // 检查SSD挂载状态
-    if (!cached_ssd_info.empty())
+    //if (!cached_ssd_info.empty() && para.pushssdDataEnable == true)
+    if (!cached_ssd_info.empty() && osd->para.pushssdDataEnable == true)
     {
         char ssdInfo[100];
 
@@ -997,34 +1230,37 @@ void ModuleOsd::osdHandlerCallback(void* arg, std::shared_ptr<MediaBuffer> media
                            cached_filesystem_usage.first,
                            cached_filesystem_usage.second);
 
-        if (ret < 0 || ret >= sizeof(ssdInfo))
+        //if (ret < 0 || ret >= sizeof(ssdInfo))
+        if (ret < 0 || static_cast<size_t>(ret) >= sizeof(ssdInfo))
         {
             // 错误处理：snprintf 失败或输出被截断
             fprintf(stderr, "Failed to format SSD info or output was truncated.\n");
         }
 
-        point.x = 500; // 设置x坐标为图像宽度的一半
-        point.y = 50;  // 设置y坐标为行高
+        //point.x = 500; // 设置x坐标为图像宽度的一半
+        //point.y = 50;  // 设置y坐标为行高
+        point.x = osd->para.osdSsdDatePara.point.x;
+        point.y = osd->para.osdSsdDatePara.point.y;
         putText(mat,
                 ssdInfo,
                 point,
-                osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale,
-                osd->para.osdTextPara.color);
+                osd->para.osdSsdDatePara.fontFace,
+                osd->para.osdSsdDatePara.fontScale,
+                osd->para.osdSsdDatePara.color);
     }
     else
     {
         // SSD未挂载，显示-1
-        char ssdInfo[50];
-        snprintf(ssdInfo, sizeof(ssdInfo), "SSD: -1");
-        point.x = 500; // 设置x坐标为图像宽度的一半
-        point.y = 50;  // 设置y坐标为行高
-        putText(mat,
-                ssdInfo,
-                point,
-                osd->para.osdTextPara.fontFace,
-                osd->para.osdTextPara.fontScale,
-                osd->para.osdTextPara.color);
+        //char ssdInfo[50];
+        //snprintf(ssdInfo, sizeof(ssdInfo), "SSD: -1");
+        //point.x = 500; // 设置x坐标为图像宽度的一半
+        //point.y = 50;  // 设置y坐标为行高
+        //putText(mat,
+        //        ssdInfo,
+        //        point,
+        //        osd->para.osdTextPara.fontFace,
+        //        osd->para.osdTextPara.fontScale,
+        //        osd->para.osdTextPara.color);
     }
 
     //更新当前时间戳

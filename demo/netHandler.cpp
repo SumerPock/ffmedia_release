@@ -104,7 +104,8 @@ void NetHandler::setNetworkDevice(const std::string& dev)
 void NetHandler::setRemoteDeviceInfo(const std::string& ip, uint16_t port)
 {
     struct in_addr ip_addr;
-    if (inet_pton(AF_INET, ip.c_str(), &(ip_addr.s_addr))) {
+    if (inet_pton(AF_INET, ip.c_str(), &(ip_addr.s_addr))) 
+    {
         remotePoint.sin_addr.s_addr = ip_addr.s_addr;
     }
     remotePoint.sin_port = htons(port);
@@ -415,11 +416,20 @@ int NetHandler::readSocket(char* buffer, unsigned bufferSize, struct sockaddr_in
     return bytesRead;
 }
 
+/// @brief 
+/// @param buffer 
+/// @param bufferSize 
+/// @param toAddress 
+/// @return 
 int NetHandler::writeSocket(char* buffer, unsigned int bufferSize, sockaddr_in& toAddress)
 {
     return sendto(fd, buffer, bufferSize, 0, (struct sockaddr*)&toAddress, sizeof(struct sockaddr_in));
 }
 
+/// @brief 
+/// @param filename 
+/// @param line 
+/// @return 
 int NetHandler::writeStringToFile(const std::string& filename, const std::string& line)
 {
     std::fstream outFile(filename, std::ofstream::app);

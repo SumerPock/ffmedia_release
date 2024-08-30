@@ -58,3 +58,7 @@ sudo vim /etc/security/limits.conf
 *	hard	nproc	102400
 
 ```
+
+sumerpack-增加读取CPU温度和SSD容量及温度功能
+需要下载安装
+sudo apt install smartmontools
