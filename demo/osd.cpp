@@ -738,14 +738,19 @@ int ModuleOsd::init()
     }
 
     //处理视频解码
-    output = last_vmod->getOutputImagePara();
-    if (output.v4l2Fmt == V4L2_PIX_FMT_MJPEG || output.v4l2Fmt == V4L2_PIX_FMT_H264
-        || output.v4l2Fmt == V4L2_PIX_FMT_HEVC) {
-        shared_ptr<ModuleMppDec> dec = make_shared<ModuleMppDec>(); // 初始化视频解码器ModuleMppDec
+    output = last_vmod->getOutputImagePara();//获取上一个视频模块的输出图像参数output
+    /*检查输出图像的格式是否为 MJPEG、H264 或 HEVC*/
+    if (output.v4l2Fmt == V4L2_PIX_FMT_MJPEG || 
+        output.v4l2Fmt == V4L2_PIX_FMT_H264 || 
+        output.v4l2Fmt == V4L2_PIX_FMT_HEVC)
+    {                                                               // 需要进行视频解码
+        // 创建一个ModuleMppDec实例，这是一个视频解码器模块
+        shared_ptr<ModuleMppDec> dec = make_shared<ModuleMppDec>();
         dec->setProductor(last_vmod);//将解码器设置为视频模块的生产者
-        dec->setBufferCount(10);
+        dec->setBufferCount(10);    //设置解码器模块的缓冲器数量为10
         ret = dec->init();
-        if (ret < 0) {
+        if (ret < 0) 
+        {
             ff_error("Dec init failed\n");
             return -1;
         }
@@ -753,57 +758,69 @@ int ModuleOsd::init()
     }
 
     //图像参数处理与RGA模块初始化
-    output = last_vmod->getOutputImagePara();
+    output = last_vmod->getOutputImagePara(); // 再次获取上一个视频模块的输出图像参数 output
     {
-        output.v4l2Fmt = V4L2_PIX_FMT_BGR24;
-        if (para.oPara.width && para.oPara.height) {
+        output.v4l2Fmt = V4L2_PIX_FMT_BGR24; // 设置输出图像格式为 BGR24
+        if (para.oPara.width && para.oPara.height)
+        { // 若配置文件中给定了宽度和高度，则更新
             output.width = para.oPara.width;
             output.height = para.oPara.height;
             output.hstride = para.oPara.width;
             output.vstride = para.oPara.height;
         }
     }
-
+    // 创建一个ModuleRga实例，这是一个图像处理模块（RGA，Rockchip Graphics Adapter）
     shared_ptr<ModuleRga> rga = make_shared<ModuleRga>(output, para.oRotate);
-    rga->setProductor(last_vmod);
-    rga->setBufferCount(8);
-    rga->setOutputDataCallback(this, osdHandlerCallback); 
-    rga->setRgaSchedulerCore(ModuleRga::SCHEDULER_RGA3_DEFAULT);
-    ret = rga->init();
+    rga->setProductor(last_vmod);//将RGA模块设置为上一个视频的生产者
+    rga->setBufferCount(8); //RGA模块的缓冲区数量为8
+    rga->setOutputDataCallback(this, osdHandlerCallback); // 设置 RGA 模块的输出数据回调函数 osdHandlerCallback
+    rga->setRgaSchedulerCore(ModuleRga::SCHEDULER_RGA3_DEFAULT); // 设置 RGA 模块的调度核心为 SCHEDULER_RGA3_DEFAULT
+    ret = rga->init();//初始化RGA模块
     if (ret < 0) {
         ff_error("rga init failed\n");
         return -1;
     }
 
     //显示模块初始化
-    last_vmod = rga;
-    if (para.dDisplayEnable && para.dDisplay >= 0) {
-        output = last_vmod->getOutputImagePara();
-        drm_display = make_shared<ModuleDrmDisplay>();
-        drm_display->setPlanePara(V4L2_PIX_FMT_NV12, para.dDisplay,
-                                  PLANE_TYPE_OVERLAY_OR_PRIMARY, 0xFF,
-                                  1, para.dDisplayConn);
-        drm_display->setBufferCount(1);
-        drm_display->setProductor(last_vmod);
+    last_vmod = rga; // 将last_vmod更新为RGA
+    if (para.dDisplayEnable && para.dDisplay >= 0) 
+    {
+        output = last_vmod->getOutputImagePara(); // 获取上一个视频模块的输出图像参数 output
+        drm_display = make_shared<ModuleDrmDisplay>(); // 创建一个 ModuleDrmDisplay 实例，这是一个显示模块
+        //设置显示模块的平面参数，格式，显示设备，平面设备，alpha值，层级，连接类型
+        drm_display->setPlanePara(V4L2_PIX_FMT_NV12, 
+                                  para.dDisplay,
+                                  PLANE_TYPE_OVERLAY_OR_PRIMARY, 
+                                  0xFF,
+                                  1, 
+                                  para.dDisplayConn);
+        drm_display->setBufferCount(1);//设置显示模块的缓冲区数量为1
+        drm_display->setProductor(last_vmod); // 将显示模块设置为上一个视频模块的生产者
         if (para.dDisplayFps > 0)
-            drm_display->setDuration(1000000 / para.dDisplayFps);
+            drm_display->setDuration(1000000 / para.dDisplayFps); // 设置显示模块的持续时间为 1 秒除以帧率
 
-        ret = drm_display->init();
-        if (ret < 0) {
+        ret = drm_display->init(); // 初始化显示模块，如果初始化失败则移除消费者并返回错误
+        if (ret < 0) 
+        {
             ff_error("drm display init failed\n");
             last_vmod->removeConsumer(drm_display);
             drm_display = nullptr;
-        } else {
+        } 
+        else 
+        {
             uint32_t t_h, t_v;
-            drm_display->getPlaneSize(&t_h, &t_v);
-            uint32_t w, h, x, y;
+            drm_display->getPlaneSize(&t_h, &t_v); // 获取显示平面的尺寸
+            uint32_t w, h, x, y;                   // 并根据配置参数 para.dCorp 计算显示区域的坐标和尺寸
 
-            if (para.dCorp.h > 0 && para.dCorp.w > 0) {
+            if (para.dCorp.h > 0 && para.dCorp.w > 0) 
+            {
                 x = std::min(t_h, para.dCorp.x);
                 y = std::min(t_v, para.dCorp.y);
                 w = std::min(t_h - x, para.dCorp.w);
                 h = std::min(t_v - y, para.dCorp.h);
-            } else {
+            } 
+            else 
+            {
                 w = std::min(t_h, output.width);
                 h = std::min(t_v, output.height);
                 x = (t_h - w) / 2;

@@ -6,11 +6,13 @@ CMakeFiles/demo_comm.dir/demo/ini.c.o
  /home/firefly/ffmedia_release/demo/ini.h
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o
  /home/firefly/ffmedia_release/demo/demo_comm.cpp
+ /home/firefly/ffmedia_release/demo/demo_comm.hpp
  /home/firefly/ffmedia_release/demo/ini.h
  /home/firefly/ffmedia_release/demo/netHandler.hpp
  /home/firefly/ffmedia_release/demo/system_common.hpp
  /home/firefly/ffmedia_release/demo/ttyHandler.hpp
 CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o
+ /home/firefly/ffmedia_release/demo/demo_comm.hpp
  /home/firefly/ffmedia_release/demo/netHandler.cpp
  /home/firefly/ffmedia_release/demo/netHandler.hpp
  /home/firefly/ffmedia_release/demo/system_common.hpp
@@ -18,6 +20,7 @@ CMakeFiles/demo_comm.dir/demo/system_common.cpp.o
  /home/firefly/ffmedia_release/demo/system_common.cpp
  /home/firefly/ffmedia_release/demo/system_common.hpp
 CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o
+ /home/firefly/ffmedia_release/demo/demo_comm.hpp
  /home/firefly/ffmedia_release/demo/netHandler.hpp
  /home/firefly/ffmedia_release/demo/system_common.hpp
  /home/firefly/ffmedia_release/demo/ttyHandler.cpp

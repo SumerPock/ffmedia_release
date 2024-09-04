@@ -5,11 +5,13 @@ CMakeFiles/demo_comm.dir/demo/ini.c.o: ../demo/ini.c
 CMakeFiles/demo_comm.dir/demo/ini.c.o: ../demo/ini.h
 
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/demo_comm.cpp
+CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/demo_comm.hpp
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/ini.h
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/netHandler.hpp
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/system_common.hpp
 CMakeFiles/demo_comm.dir/demo/demo_comm.cpp.o: ../demo/ttyHandler.hpp
 
+CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o: ../demo/demo_comm.hpp
 CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o: ../demo/netHandler.cpp
 CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o: ../demo/netHandler.hpp
 CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o: ../demo/system_common.hpp
@@ -17,6 +19,7 @@ CMakeFiles/demo_comm.dir/demo/netHandler.cpp.o: ../demo/system_common.hpp
 CMakeFiles/demo_comm.dir/demo/system_common.cpp.o: ../demo/system_common.cpp
 CMakeFiles/demo_comm.dir/demo/system_common.cpp.o: ../demo/system_common.hpp
 
+CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o: ../demo/demo_comm.hpp
 CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o: ../demo/netHandler.hpp
 CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o: ../demo/system_common.hpp
 CMakeFiles/demo_comm.dir/demo/ttyHandler.cpp.o: ../demo/ttyHandler.cpp

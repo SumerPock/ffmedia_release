@@ -5,7 +5,10 @@
 
 #include "ini.h"
 #include "ttyHandler.hpp"
+#include "demo_comm.hpp"
 
+// 定义全局消息队列
+MessageQueue messageQueue;
 
 #define MATCH(s, n) strcmp(s, n) == 0
 
@@ -148,7 +151,7 @@ std::unordered_map<std::string, void (*)(std::stringstream&, TtyConfig&)> ttySet
     {"ttyPara", setTtyPara},    //串口参数详细配置，波特率，数据位，停止位
     {"netDev", setTtyNetDevice},
     {"gpsFile", setTtyGpsFile}, //GPS文件存储名
-    {"gpsFileLineNumber", setTtyGpsFileLineNumber}, //GPS文件存储包行数
+    {"gpsFileLineNumber", setTtyGpsFileLineNumber}, //GPS文件显示在第几行
     {"dataFile", setTtyDataFile},                   //串口存储文件路径
     {"dataFileMaxLines", setTtyDataFileMaxLines},   //单个文件最大存储包数量
     {"timeDiff", setTtyTimeDiff},   //时间差，查出GPS与本机时间差大于此值时，修正本机时间
@@ -338,8 +341,8 @@ int main(int argc, char** argv)
     while (true) 
     {
         err = sigwait(&st, &sig); // 使用sigwait等待信号集中的信号
-        if (err == 0) 
-        {
+        if (err == 0)
+        { // 表示捕获到信号，打印信号编号并跳出循环，准备进行程序的停止和清理操作
             printf("receive sig: %d\n", sig);
             break;
         }

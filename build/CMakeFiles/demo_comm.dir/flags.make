@@ -7,11 +7,11 @@ C_FLAGS =  -O3 -Wall -fPIC -s
 
 C_DEFINES = 
 
-C_INCLUDES = -I/usr/include/opencv4 -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include 
+C_INCLUDES = -I/usr/include/opencv4 -I/home/firefly/ffmedia_release/demo -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include 
 
 CXX_FLAGS =  -O3 -Wall -fPIC -s  
 
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/usr/include/opencv4 -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include 
+CXX_INCLUDES = -I/usr/include/opencv4 -I/home/firefly/ffmedia_release/demo -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include 
 

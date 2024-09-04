@@ -49,9 +49,12 @@ private:
     void processIPInfo(uint8_t* buf, size_t bytes);
 
     void respondHeartbeatMsg(struct sockaddr_in& fromAddress);
-
     int setupDatagramSock();
-    int readSocket(char* buffer, unsigned bufferSize, struct sockaddr_in& fromAddress);
+    void dataOutputSTM32Message(struct sockaddr_in &fromAddress);
+
+    void dataOutputRK3588Message(struct sockaddr_in &fromAddress);
+
+    int readSocket(char *buffer, unsigned bufferSize, struct sockaddr_in &fromAddress);
     int readSocket(char* buffer, unsigned bufferSize, struct sockaddr_in& fromAddress, int timeout);
     int writeSocket(char* buffer, unsigned int bufferSize, sockaddr_in& toAddress);
 

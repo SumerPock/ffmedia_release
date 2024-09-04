@@ -6,5 +6,5 @@ CXX_FLAGS =  -O3 -Wall -fPIC -s
 
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include -isystem /usr/include/opencv4 
+CXX_INCLUDES = -I/home/firefly/ffmedia_release/demo -I/home/firefly/ffmedia_release -I/home/firefly/ffmedia_release/include -isystem /usr/include/opencv4 
 

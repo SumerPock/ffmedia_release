@@ -20,6 +20,9 @@
 
 #include "tty_process.hpp"
 
+//看了下tty_process.cpp 邓并没有用这个文件
+
+
 int speed_arr[] = {
     B38400,
     B19200,
@@ -119,40 +122,47 @@ ModuleTtyProcess::~ModuleTtyProcess()
         delete[] packet;
 }
 
+/// @brief 根据给定的参数设置终端设备的通信速度，并处理设置过程中可能遇到的错误。
+/// @return
 int ModuleTtyProcess::setSpeed()
 {
     int i, status;
     struct termios Opt;
 
-    tcgetattr(fd, &Opt);
-    for (i = 0; i < (int)(sizeof(speed_arr) / sizeof(int)); i++) {
-        if (para.speed == name_arr[i]) {
-            tcflush(fd, TCIOFLUSH);
-            cfsetispeed(&Opt, speed_arr[i]);
+    tcgetattr(fd, &Opt); // 用 tcgetattr(fd, &Opt) 获取文件描述符 fd 当前的终端属性，并将其存储到 Opt 结构体中
+    for (i = 0; i < (int)(sizeof(speed_arr) / sizeof(int)); i++) 
+    {
+        if (para.speed == name_arr[i])
+        { // 在循环中，判断 para.speed 是否等于 name_arr[i] 中的速度值
+            tcflush(fd, TCIOFLUSH);             // 使用 tcflush(fd, TCIOFLUSH) 清空输入输出缓冲区
+            cfsetispeed(&Opt, speed_arr[i]);    // 使用 cfsetispeed 和 cfsetospeed 设置输入和输出的波特率
             cfsetospeed(&Opt, speed_arr[i]);
-            status = tcsetattr(fd, TCSANOW, &Opt);
-            if (status != 0) {
+            status = tcsetattr(fd, TCSANOW, &Opt); // 使用 tcsetattr(fd, TCSANOW, &Opt) 将设置应用到终端。如果设置失败，打印错误信息并返回 -1
+            if (status != 0) 
+            {
                 perror("tcsetattr fd1");
                 return -1;
             }
             return 0;
         }
-        tcflush(fd, TCIOFLUSH);
+        tcflush(fd, TCIOFLUSH); // 使用 tcflush(fd, TCIOFLUSH) 清空输入输出缓冲区
     }
     return -1;
 }
 
+/// @brief  设置终端的串行通信参数，包括数据位、奇偶校验、停止位、硬件流控等
+/// @return 
 int ModuleTtyProcess::setParity()
 {
-    struct termios options;
-
-    if (tcgetattr(fd, &options) != 0) {
+    struct termios options; //用于存储终端的当前属性
+    if (tcgetattr(fd, &options) != 0) // 使用 tcgetattr(fd, &options) 获取文件描述符 fd 对应的终端属性
+    {
         perror("SetupSerial 1");
         return -1;
     }
-    options.c_oflag &= ~OPOST;
-    options.c_cflag &= ~CSIZE;
-    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    options.c_oflag &= ~OPOST; // 禁用输出处理选项 OPOST
+    options.c_cflag &= ~CSIZE; // 清除 c_cflag 中的字符大小掩码 CSIZE，以便后续设置数据位
+    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // 禁用本地模式标志，包括规范输入模式（ICANON），回显（ECHO, ECHOE），和信号（ISIG）
     /**设置数据位数**/
     switch (para.databits) {
         case 7:
@@ -167,12 +177,12 @@ int ModuleTtyProcess::setParity()
     }
     /**设置奇偶校验**/
     switch (para.parity) {
-        case 0: /*as no parity*/
+        case 0: /*0 表示无校验（No parity）*/
             options.c_cflag &= ~PARENB;
             options.c_cflag &= ~CSTOPB;
             break;
 
-        case 1:
+        case 1:                                   // 1 表示奇校验
             options.c_cflag |= (PARODD | PARENB); /* 设置为奇效验*/
             options.c_iflag |= INPCK;             /* Disnable parity checking */
             break;
@@ -181,7 +191,7 @@ int ModuleTtyProcess::setParity()
             options.c_cflag &= ~PARODD; /* 转换为偶效验*/
             options.c_iflag |= INPCK;   /* Disnable parity checking */
             break;
-        case 3:
+        case 3:                         // 表示标记校验
             options.c_cflag &= ~PARENB; /* Clear parity enable */
                                         //	options.c_iflag &= ~INPCK;				/* Enable parity checking */
             break;
@@ -218,140 +228,197 @@ int ModuleTtyProcess::setParity()
     return 0;
 }
 
+/// @brief 
+/// @return 
 int ModuleTtyProcess::open()
 {
+    // 使用 ::open 函数打开指定的设备文件，其中 device 是设备文件的路径字符串
+    // O_RDWR：以读写模式打开设备
+    // O_NOCTTY：不将打开的文件描述符作为控制终端
+    // O_NDELAY：非阻塞模式，如果设备文件不可用，不会阻塞程序
     fd = ::open(device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
     if (fd == -1) {
         return -1;
     }
 
+    // 使用 fcntl 函数设置文件状态标志
+    // F_SETFL：设置文件描述符状态标志
+    // 0：清除所有非阻塞标志（如 O_NDELAY）
     if (fcntl(fd, F_SETFL, 0) < 0)
         printf("fcntl fail\n");
 
     return fd;
 }
 
+/// @brief 
 void ModuleTtyProcess::close()
 {
+    // 检查 fd 是否有效。如果 fd 小于 0，说明没有打开的文件描述符，函数直接返回，不执行任何操作
     if (fd < 0)
         return;
-
+    // 使用 ::close 函数关闭文件描述符 fd，断开与设备的连接
     ::close(fd);
     fd = -1;
 }
 
+/// @brief 从文件描述符 fd 读取指定数量的字节（n），并将数据存入指定的缓冲区（buffer）中
+//         目的：readn 函数使用非阻塞操作读取 n 字节的数据到缓冲区，并能优雅地处理读取过程中的中断
+//         机制：利用 poll 等待数据可读，处理部分读取和错误，并支持被信号中断的系统调用。
+/// @param buffer
+/// @param n
+/// @return 返回成功读取的字节数，或者在遇到不可恢复的错误时返回 -1。
 ssize_t ModuleTtyProcess::readn(uint8_t* buffer, size_t n)
 {
-    ssize_t num_read;
-    size_t to_read;
-    uint8_t* buf;
-    struct pollfd p_fd = {.fd = fd, .events = POLLIN};
+    ssize_t num_read;       // 存储每次 read 调用读取的字节数
+    size_t to_read;         // 追踪到目前为止读取的总字节数
+    uint8_t *buf;           // 一个指针，初始指向缓冲区的开始位置，读取数据后逐步向前移动
+    struct pollfd p_fd =    // 用于 poll 系统调用的结构体，用于监视文件描述符上的数据
+        {
+            .fd = fd,          // 要读取的文件描述符
+            .events = POLLIN}; // 表示监视的事件类型为“数据可读”
 
-    buf = buffer;
-    for (to_read = 0; to_read < n;) {
-        if (poll(&p_fd, 1, time_out) <= 0)
-            return to_read;
+    buf = buffer; // 初始化为指向缓冲区的开始位置，准备接收读取的数据
+    for (to_read = 0; to_read < n;) // 直到 to_read 等于 n（即读取了请求的字节数）
+    {
+        if (poll(&p_fd, 1, time_out) <= 0) // poll 函数检查在指定的 time_out 时间内，是否有数据可供读取
+            return to_read;                // 表示超时或错误 , 函数返回已读取的字节数（to_read）
 
+        // 尝试从文件描述符 fd 中读取最多 n - to_read 字节的数据到缓冲区 buf 中 , num_read 存储实际读取的字节数
         num_read = read(fd, buf, n - to_read);
         if (num_read == 0)
-            return to_read;
-        else if (num_read == -1) {
+            return to_read; // 文件结束（EOF）或无更多数据 , 函数返回已读取的总字节数（to_read）
+        else if (num_read == -1) 
+        {
             if (errno == EINTR)
-                continue;
+                continue; // 如果 errno 是 EINTR，表示读取操作被信号中断，循环应该继续重试读取
             else
                 return -1;
         }
-        to_read += num_read;
-        buf += num_read;
+        to_read += num_read; // to_read 增加本次读取的字节数（num_read）
+        buf += num_read; // 缓冲区指针 buf 前移 num_read 字节，指向下一个将要写入数据的位置
     }
     return to_read;
 }
 
+/// @brief 将指定数量的字节（n）从缓冲区（buffer）写入文件描述符（fd）。该函数使用了循环和错误处理机制，确保在中断情况下（如信号打断）能够继续写入，直到成功写入指定的字节数
+/// @param buffer
+/// @param n
+/// @return
 ssize_t ModuleTtyProcess::writen(const uint8_t* buffer, size_t n)
 {
-    ssize_t num_write;
-    size_t to_write;
-    const uint8_t* buf;
+    ssize_t num_write;  // 存储每次 write 调用实际写入的字节数
+    size_t to_write;    // 追踪到目前为止已写入的总字节数
+    const uint8_t *buf; // 指针，初始指向缓冲区的开始位置，并在写入数据后逐步向前移动
 
-    buf = buffer;
-    for (to_write = 0; to_write < n;) {
+    buf = buffer; // 初始化为指向缓冲区的开始位置，准备从这里开始写入数据
+    for (to_write = 0; to_write < n;) // 即已写入请求的字节数
+    {
+        // 使用 write 函数将最多 n - to_write 字节的数据从缓冲区 buf 写入文件描述符 fd
         num_write = write(fd, buf, n - to_write);
-        if (num_write <= 0) {
-            if (num_write == -1 && errno == EINTR)
+        if (num_write <= 0)
+        { // 写入失败或写入零字节
+            if (num_write == -1 && errno == EINTR) // 如果 num_write 为 -1 且 errno 为 EINTR，表示写入操作被信号中断，循环应该继续重试写入
                 continue;
             else
                 return -1;
         }
-
+        // to_write 增加本次写入的字节数（num_write）
         to_write += num_write;
+        // 冲区指针 buf 前移 num_write 字节，指向下一个将要写入的数据位置
         buf += num_write;
     }
     return to_write;
 }
 
-
+/// @brief  初始化串行端口。它负责打开串行端口，设置通信速度和校验方式，并为数据包分配内存
+/// @return
 int ModuleTtyProcess::init()
 {
-    if (fd > 0)
+    if (fd > 0) // 检查文件描述符是否已经打开
         return 0;
 
-    fd = open();
+    fd = open(); // 调用 open() 方法尝试打开串行端口
     if (fd < 0) {
         printf("Failed to open serial port!\n");
         return -1;
     }
 
-    if (setSpeed()) {
+    if (setSpeed()) // 调用 setSpeed() 方法设置串行端口的通信速度
+    {
         printf("Failed to set speed\n");
         close();
         return -1;
     }
 
-    if (setParity()) {
+    if (setParity()) // 调用 setParity() 方法设置串行端口的校验方式
+    {
         printf("Failed to set parity\n");
         close();
         return -1;
     }
 
-    if (packet)
+    if (packet) // 检查 packet 是否已经分配内存。如果已经分配，则释放之前的内存（避免内存泄漏）
         delete[] packet;
-
+    // 使用 new 分配一个新的字节数组，用于存储数据包，大小为 packet_size
     packet = new uint8_t[packet_size];
     return 0;
 }
 
+/// @brief 启动串行端口处理线程（work_thread），并设置一个工作标志（work_flag），用于控制线程的运行
 void ModuleTtyProcess::start()
 {
+    // 将 work_flag 设置为 true，表示后台线程应继续运行。这通常用于控制线程中的循环逻辑，使其保持活动状态
     work_flag = true;
+    // 检查 work_thread 是否已经存在（非空）。如果线程已经存在，则不会创建新线程
+    // 如果 work_thread 为空，则创建一个新线程，运行 ModuleTtyProcess::ttyProcess 成员函数。使用 this 关键字将当前对象实例作为参数传递给线程函数
     work_thread = work_thread ? work_thread : new std::thread(&ModuleTtyProcess::ttyProcess, this);
 }
 
+/// @brief 停止串行端口处理线程，确保线程安全地退出，并清理相关资源
 void ModuleTtyProcess::stop()
 {
+    // 将 work_flag 设置为 false，通知线程应停止运行。这会影响 ttyProcess 函数中控制线程执行的逻辑
     work_flag = false;
-    if (work_thread) {
-        work_thread->join();
-        delete work_thread;
+    if (work_thread) // 检查 work_thread 是否存在（非空）
+    {
+        work_thread->join(); // 调用 join() 方法，等待线程执行完成。join 确保主线程在 work_thread 线程完成之前不会继续执行，从而安全地结束工作线程
+        delete work_thread;  // 使用 delete 释放 work_thread 所占用的内存，并将其指针设置为 nullptr，防止悬空指针
         work_thread = nullptr;
     }
 }
 
+/// @brief 用于处理接收到的 GPS 信息。这些信息通常通过串行端口或其他通信方式接收。
+///        该函数解析 GPS 数据，将其转换为易于理解的格式，并根据条件调整系统时间
+/// @param buf
+/// @param bytes
+/// @return
 int ModuleTtyProcess::processGpsInfo(uint8_t* buf, size_t bytes)
 {
-    GpsInfo info;
-    char info_str[256];
-    if (bytes < sizeof info)
+    GpsInfo info;       // 用于存储 GPS 信息
+    char info_str[256]; // 存储格式化后的 GPS 信息字符串
+    if (bytes < sizeof info) // 检查传入的字节数 bytes 是否小于 GpsInfo 结构体的大小
         return -1;
 
-    memcpy((uint8_t*)&info, buf, sizeof info);
-    sprintf(info_str, "%c %d %0.4f : %c %d %0.4f", info.latitude_h, info.latitude,
-            info.latitude_d / 10000.0, info.longitude_h, info.longitude, info.longitude_d / 10000.0);
+    memcpy((uint8_t *)&info, buf, sizeof info); // 将接收到的 GPS 数据从 buf 缓冲区复制到 info 结构体中
+    // 使用 sprintf 函数将 info 中的 GPS 信息格式化为易读的字符串形式并存储到 info_str 中
+    sprintf(info_str, 
+            "%c %d %0.4f : %c %d %0.4f", 
+            info.latitude_h,            //纬度方向
+            info.latitude,              //整数部分
+            info.latitude_d / 10000.0,  //小数部分 
+            info.longitude_h,           //经度方向 
+            info.longitude,             //整数部分
+            info.longitude_d / 10000.0);//小数部分
+    // 例如，格式化字符串可能是 "N 37 12.3456 : W 122 23.4567"。
 
-    if (!gpsinfo_output_file.empty()) {
+    if (!gpsinfo_output_file.empty())
+    { // 检查 gpsinfo_output_file 是否为空
         writeStringToLine(gpsinfo_output_file, gpsinfo_output_file_lines, info_str);
+        // 调用 writeStringToLine 函数，将 info_str 写入指定的文件中
     }
 
-    if (time_diff >= 0) {
+    if (time_diff >= 0) // 根据时间差调整系统时间
+    {
         time_t time;
         struct timeval tv;
         struct tm timeinfo;
@@ -364,6 +431,7 @@ int ModuleTtyProcess::processGpsInfo(uint8_t* buf, size_t bytes)
         timeinfo.tm_sec = info.second;
         time = mktime(&timeinfo) + 28800;  // 8 * 60 * 60s;
 
+        // 使用 gettimeofday 获取当前系统时间，并计算设备时间与系统时间的差异 diff
         gettimeofday(&tv, NULL);
         int64_t diff = std::labs(tv.tv_sec - time);
         // printf("time test device time %ld, sys time %ld, diff %ld\n", time, tv.tv_sec, diff);
@@ -372,9 +440,9 @@ int ModuleTtyProcess::processGpsInfo(uint8_t* buf, size_t bytes)
             int ret;
             tv.tv_sec = time;
             if (diff > time_diff)
-                ret = settimeofday(&tv, NULL);
+                ret = settimeofday(&tv, NULL); // 如果时间差大于 time_diff，使用 settimeofday 直接设置系统时间
             else
-                ret = adjtime(&tv, NULL);
+                ret = adjtime(&tv, NULL); // 使用 adjtime 调整时间，慢慢校准到正确时间
 
             if (ret != 0)
                 printf("Fail to adjust time, time diff: %ld, errno: %s\n", diff, strerror(errno));

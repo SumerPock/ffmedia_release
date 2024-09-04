@@ -222,6 +222,12 @@ int sendBroadcastMessage(int port, const char* message, const char* interface)
     return ret;
 }
 
+/// @brief 
+/// @param file_name 
+/// @param mtime 
+/// @param buf 
+/// @param lines 
+/// @return 
 int readFileLines(const char* file_name, time_t* mtime, std::string& buf, uint32_t lines)
 {
     if (file_name == nullptr)
@@ -252,6 +258,10 @@ int readFileLines(const char* file_name, time_t* mtime, std::string& buf, uint32
     return 0;
 }
 
+/// @brief 
+/// @param file_name 
+/// @param mtime 
+/// @return 
 std::vector<std::string> readFileLines(const char* file_name, time_t* mtime)
 {
     std::vector<std::string> v;

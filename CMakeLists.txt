@@ -27,6 +27,7 @@ IF(DEMO_OPENCV)
     find_package(OpenCV REQUIRED)
 ENDIF(DEMO_OPENCV)
 
+include_directories(${CMAKE_SOURCE_DIR}/demo)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)

@@ -62,3 +62,7 @@ sudo vim /etc/security/limits.conf
 sumerpack-增加读取CPU温度和SSD容量及温度功能
 需要下载安装
 sudo apt install smartmontools
+
+2024年9月4日，
+1.将串口接收的数据存入消息队列，并通过UDP网口出队并上报给远端主机
+2.增加网口协议，目前有三种类型的数据，串口数据转发（STM32板载信息),RK3588设备信息（核心温度，SSD温度容量，EMMC温度容  量）  ,RK3588运行时间这三种类型的数据，但是我还没有将他们排序发出去，目前这块还没定。

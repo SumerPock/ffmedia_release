@@ -13,8 +13,19 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <iomanip> // 引入 iomanip 以使用 std::hex 和 std::setw
 #include "netHandler.hpp"
+#include "demo_comm.hpp" // 引入定义了 MessageQueue 的头文件
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <cstring>
+#include <cstdlib> // 用于 std::system
+#include <cstdio>
+#include <arpa/inet.h> // 用于 sockaddr_in
+#include <sys/statvfs.h>
+
 
 /// @brief 静态变量，用于统计处理的GPS和设备包数量
 uint32_t NetHandler::gpsPackets = 0;
@@ -44,14 +55,110 @@ typedef struct
 
 typedef struct
 {
-    FRAME_HEADER head;
-    uint32_t tv;
-    uint32_t gps;
-    uint32_t device;
-    uint16_t crc;
+    FRAME_HEADER head; //协议头
+    uint32_t tv;        //板卡运行时间
+    uint32_t gps;       //gps
+    uint32_t device;    //
+    uint16_t crc;       //crc
 } NET_RESPOND_MSG;
 
+typedef struct
+{
+    FRAME_HEADER head;      // 协议头
+    uint16_t cpuTemp0;
+    uint16_t cpuTemp1;
+    uint16_t cpuTemp2;
+    uint16_t cpuTemp3;
+    uint16_t cpuTemp4;
+    uint16_t cpuTemp5;
+    uint32_t emmcAllCapacity;       // EMMC总容量,1Byte = 0.01GByte
+    uint32_t emmcAvailableCapacity; // EMMC可用容量
+    uint8_t  ssdMount;              // 硬盘是否挂载，并可识别赋值1，未识别0
+    uint16_t ssdTemp;               // SSD温度信息，若未读到则赋值0
+    uint32_t ssdAllCapacity;        // SSD总容量,1Byte = 0.01GByte
+    uint32_t ssdAvailableCapacity;  // SSD可用容量
+    uint16_t crc;
+} NET_RK3588_MSG;
+
+typedef struct
+{
+    FRAME_HEADER head; //协议头
+    uint16_t internalTemp; // 内置传感器温度
+    uint32_t externalTemp;     // 外置传感器温度
+    uint32_t externalHumidity; // 外置传感器湿度
+    uint32_t adcValue1; // 一通道ADC
+    uint32_t adcValue2; // 二通道ADC
+    uint16_t fanFeedback; //风扇反馈
+    uint16_t fanDutyCycle; //风扇占空比
+    uint16_t semiconductorDutyCycle; //制冷片控制占空比
+    uint8_t rk3588io; //3588IO状态
+    uint8_t poweramp; //当前电源状态
+    uint8_t errorCode; //错误代码
+    uint16_t crc;
+} NET_STM32_MSG;
+
 #pragma pack(pop)
+
+std::string execCommand(const char *cmd)
+{
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe)
+    {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
+    {
+        result += buffer.data();
+    }
+    return result;
+}
+
+uint16_t getSsdTemperature(const std::string &device)
+{
+    std::string cmd = "smartctl -A " + device;
+    std::string output = execCommand(cmd.c_str());
+
+    std::istringstream iss(output);
+    std::string line;
+    while (std::getline(iss, line))
+    {
+        if (line.find("Temperature") != std::string::npos)
+        {
+            std::istringstream lineStream(line);
+            std::string token;
+            while (lineStream >> token)
+            {
+                try
+                {
+                    return std::stoi(token);
+                }
+                catch (const std::invalid_argument &e)
+                {
+                    continue;
+                }
+            }
+        }
+    }
+    return 0; // 如果未找到温度信息，返回0
+}
+
+void readCPUTemperature(NET_RK3588_MSG &msg)
+{
+
+
+}
+
+void readEMMCCapacity(NET_RK3588_MSG &msg)
+{
+
+}
+
+void readSSDCapacity(NET_RK3588_MSG &msg)
+{
+
+}
 
 /// @brief NetHandler构造
 /// @param port
@@ -338,10 +445,187 @@ void NetHandler::respondHeartbeatMsg(struct sockaddr_in& fromAddress)
     auto ret = writeSocket((char*)&msg, msg.head.len, fromAddress);
     if (ret != msg.head.len)
         printf("Failed to writeSocket: %d\n", ret);
-
     return;
 }
 
+void NetHandler::dataOutputRK3588Message(struct sockaddr_in &fromAddress)
+{
+    NET_RK3588_MSG msg;
+    memset(&msg, 0, sizeof(msg)); // 初始化结构体
+    
+    msg.head.hh = 0xbbee;
+    /*4 + 31 + 2*/
+    msg.head.len = 0x25;
+    msg.head.id = 2;
+
+    // 读取CPU核心的温度
+    std::ifstream cpuTempFile;
+    int temp;
+    /*
+    std::cout << "Reading CPU temperatures:" << std::endl;
+    */
+    for (int i = 0; i < 6; ++i)
+    {
+        std::stringstream path;
+        path << "/sys/class/thermal/thermal_zone" << i << "/temp";
+        cpuTempFile.open(path.str());
+        if (cpuTempFile.is_open())
+        {
+            cpuTempFile >> temp;
+            cpuTempFile.close();
+            // 温度以毫度(千分之一摄氏度)读取，转换为0.1摄氏度单位
+            if (i == 0)
+                msg.cpuTemp0 = temp / 100;
+            else if (i == 1)
+                msg.cpuTemp1 = temp / 100;
+            else if (i == 2)
+                msg.cpuTemp2 = temp / 100;
+            else if (i == 3)
+                msg.cpuTemp3 = temp / 100;
+            else if (i == 4)
+                msg.cpuTemp4 = temp / 100;
+            else if (i == 5)
+                msg.cpuTemp5 = temp / 100;
+            /*
+            std::cout << "thermal_zone" << i << " temperature: " << temp << std::endl;
+            */
+        }
+        else
+        {
+            std::cerr << "Failed to open " << path.str() << std::endl;
+        }
+    }
+
+    //读取EMMC总容量即可用容量
+    std::ifstream file;
+    file.open("/sys/class/block/mmcblk0/size");
+    if (file.is_open())
+    {
+        uint64_t size;
+        file >> size;
+        double capacityGB = static_cast<double>(size) * 512 / (1024 * 1024 * 1024); // Convert to GByte
+        msg.emmcAllCapacity = capacityGB * 100;                                     // Store the exact value
+    }
+    file.close();
+    struct statvfs stats_0;
+    if (statvfs("/", &stats_0) == 0) // Assuming root filesystem is on eMMC
+    {
+        double availableBytes = static_cast<double>(stats_0.f_bavail) * stats_0.f_frsize;
+        double availableGB = availableBytes / (1024 * 1024 * 1024);
+        msg.emmcAvailableCapacity = availableGB * 100; // Store the exact value
+    }
+    else
+    {
+        std::cerr << "Failed to get filesystem statistics" << std::endl;
+    }
+    //读取SSD总容量，可用容量，温度
+    struct statvfs stats;
+    std::string ssdPath = "/home/firefly/ssdvideo";
+    std::string ssdDevice = "/dev/nvme0n1p1"; /// dev/nvme0n1p1 替换为实际的SSD设备路径
+
+    if (statvfs(ssdPath.c_str(), &stats) == 0)
+    {
+        msg.ssdMount = 1;                                                             // 硬盘挂载
+        msg.ssdAllCapacity = (stats.f_blocks * stats.f_frsize) / (1024 * 1024);       // 换算成0.01GByte
+        msg.ssdAvailableCapacity = (stats.f_bavail * stats.f_frsize) / (1024 * 1024); // 换算成0.01GByte
+
+        // 使用smartctl读取SSD温度信息
+        msg.ssdTemp = getSsdTemperature(ssdDevice);
+    }
+    else
+    {
+        msg.ssdMount = 0; // 硬盘未挂载
+        msg.ssdAllCapacity = 0;
+        msg.ssdAvailableCapacity = 0;
+        msg.ssdTemp = 0; // 温度信息不可用
+    }
+
+    /*
+    std::cout << "SSD Mount: " << static_cast<int>(msg.ssdMount) << std::endl;
+    std::cout << "SSD Total Capacity (0.01 GByte): " << msg.ssdAllCapacity << std::endl;
+    std::cout << "SSD Available Capacity (0.01 GByte): " << msg.ssdAvailableCapacity << std::endl;
+    std::cout << "SSD Temperature (°C): " << msg.ssdTemp << std::endl;
+    std::cout << std::fixed << std::setprecision(1);
+    std::cout << "CPU Temperature (in 0.1°C): "
+              << msg.cpuTemp0 << ", "
+              << msg.cpuTemp1 << ", "
+              << msg.cpuTemp2 << ", "
+              << msg.cpuTemp3 << ", "
+              << msg.cpuTemp4 << ", "
+              << msg.cpuTemp5 << std::endl;
+    //std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Total eMMC Capacity: " << msg.emmcAllCapacity << " GByte" << std::endl;
+    std::cout << "Available eMMC Capacity: " << msg.emmcAvailableCapacity << " GByte" << std::endl;
+    */
+
+    msg.crc = calculateCRC16X25((const uint8_t *)&msg, msg.head.len - 2);
+    auto ret = writeSocket((char *)&msg, msg.head.len, fromAddress);
+    if (ret != msg.head.len)
+        printf("Failed to writeSocket: %d\n", ret);
+    return;
+
+}
+
+    /// @brief 队列出队，并通过串口将其发送出去
+    /// @param fromAddress
+void NetHandler::dataOutputSTM32Message(struct sockaddr_in &fromAddress)
+{
+    NET_STM32_MSG msg;
+    if (!messageQueue.empty())
+    {
+        // 从队列中弹出数据
+        std::string data = messageQueue.pop();
+
+        // 打印数据为十六进制格式
+        std::cout << "Received data from message queue (HEX): ";
+        for (unsigned char c : data)
+        {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c) << " ";
+        }
+        std::cout << std::endl;
+        if (data.size() >= 28) // 确保数据长度足够
+        {
+            msg.head.hh = 0xbbee;
+            //4(头) + 27(数据) + 2（CRC）
+            msg.head.len = 0x1F + 2;
+            msg.head.id = 3;
+            /*内置传感器温度 */
+            msg.internalTemp = (data[1] << 8) | data[0];
+            /*外置传感器温度*/
+            msg.externalTemp = (data[5] << 8) | (data[4] << 16) | (data[3] << 24) | data[2];
+            /*外置传感器湿度 */
+            msg.externalHumidity = (data[9] << 8) | (data[8] << 16) | (data[7] << 24) | data[6];
+            /*一通道ADC值*/
+            //msg.adcValue1 = (data[13] << 8) | (data[12] << 16) | (data[11] << 24) | data[10];
+            msg.adcValue1 = (data[13] << 24) | (data[12] << 16) | (data[11] << 8) | (data[10]);
+            /*二通道ADC值*/
+            // msg.adcValue2 = (data[17] << 8) | (data[16] << 16) | (data[15] << 24) | data[14];
+            msg.adcValue2 = (data[17] << 24) | (data[16] << 16) | (data[15] << 8) | (data[14]);
+            /*风扇反馈信息频率*/
+            msg.fanFeedback = (data[19] << 8) | data[18];
+            /*风扇反馈占空比*/
+            msg.fanDutyCycle = (data[21] << 8) | data[20];
+            /*制冷片控制占空比*/
+            msg.semiconductorDutyCycle = (data[23] << 8) | data[22];
+            /*IO状态*/
+            msg.rk3588io = data[24];
+            /*当前电源状态*/
+            msg.poweramp = data[25];
+            /*错误状态*/
+            msg.errorCode = data[26];
+
+            msg.crc = calculateCRC16X25((const uint8_t *)&msg, msg.head.len - 2);
+
+            auto ret = writeSocket((char *)&msg, msg.head.len, fromAddress);
+            if (ret != msg.head.len)
+                printf("Failed to writeSocket: %d\n", ret);
+            return;
+        }else{
+            std::cerr << "Received data is too short to parse." << std::endl;
+        }
+    }
+
+}
 
 static int reuseFlag = 1;
 
@@ -459,12 +743,14 @@ void NetHandler::heartbeatLoop()
 
             if (loop == 0)
             {
-                //sendHeartbeatMsg();
+                dataOutputRK3588Message(remotePoint);
+                //dataOutputSTM32Message(remotePoint);
+                // sendHeartbeatMsg();
                 loop = 1;
             }
             else if (loop == 1)
             {
-                respondHeartbeatMsg(remotePoint);
+                //respondHeartbeatMsg(remotePoint);
                 loop = 0;
             }
             lastHeartbeat = now;
